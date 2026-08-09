@@ -1,57 +1,42 @@
-import { mutation, query, internalMutation } from "./_generated/server";
+import { mutation, query } from "./_generated/server";
 import { v, ConvexError } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
+import { FIELD_BY_KEY, SELF_FIELDS } from "./lib/fields.js";
 
-const NUMERIC_FIELDS = [
-  "codingHours",
-  "sleepHours",
-  "coffeeIntake",
-  "githubCommits",
-  "aiToolUsageMinutes",
-  "problemsSolved",
-  "taskDifficulty",
-  "experienceLevel",
-  "programmingScore",
-];
+// The self-reported layer. Commit counts used to live here as a typed-in
+// number; they are measured now and live in githubDaily, written only by
+// convex/github.js. Keeping the two apart is what lets the analysis say which
+// side of a correlation is subjective.
 
 function assertValidRanges(fields) {
-  if (
-    fields.taskDifficulty !== undefined &&
-    (fields.taskDifficulty < 1 || fields.taskDifficulty > 5)
-  ) {
-    throw new ConvexError("taskDifficulty must be between 1 and 5");
-  }
-  if (
-    fields.experienceLevel !== undefined &&
-    (fields.experienceLevel < 1 || fields.experienceLevel > 5)
-  ) {
-    throw new ConvexError("experienceLevel must be between 1 and 5");
-  }
-  if (
-    fields.programmingScore !== undefined &&
-    (fields.programmingScore < 1 || fields.programmingScore > 10)
-  ) {
-    throw new ConvexError("programmingScore must be between 1 and 10");
+  for (const key of SELF_FIELDS) {
+    const value = fields[key];
+    if (value === undefined) continue;
+
+    const def = FIELD_BY_KEY[key];
+    if (!Number.isFinite(value)) {
+      throw new ConvexError(`${def.label} must be a number`);
+    }
+    if (def.min !== undefined && value < def.min) {
+      throw new ConvexError(`${def.label} must be ${def.min} or more`);
+    }
+    if (def.max !== undefined && value > def.max) {
+      throw new ConvexError(`${def.label} must be ${def.max} or less`);
+    }
+    if (def.scale && !Number.isInteger(value)) {
+      throw new ConvexError(`${def.label} must be a whole number`);
+    }
   }
 }
 
-function shiftDateString(dateStr, days) {
-  const d = new Date(dateStr + "T00:00:00Z");
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
-}
-
-function pearsonCorrelation(xs, ys) {
-  const n = xs.length;
-  if (n < 2) return null;
-  const sumX = xs.reduce((a, b) => a + b, 0);
-  const sumY = ys.reduce((a, b) => a + b, 0);
-  const sumXY = xs.reduce((sum, x, i) => sum + x * ys[i], 0);
-  const sumX2 = xs.reduce((sum, x) => sum + x * x, 0);
-  const sumY2 = ys.reduce((sum, y) => sum + y * y, 0);
-  const denominator = Math.sqrt((n * sumX2 - sumX ** 2) * (n * sumY2 - sumY ** 2));
-  if (denominator === 0) return null;
-  return (n * sumXY - sumX * sumY) / denominator;
+function assertValidDate(date) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    throw new ConvexError("Date must be in YYYY-MM-DD format");
+  }
+  const today = new Date().toISOString().slice(0, 10);
+  if (date > today) {
+    throw new ConvexError("Cannot log a day that hasn't happened yet");
+  }
 }
 
 async function requireUserId(ctx) {
@@ -62,41 +47,57 @@ async function requireUserId(ctx) {
   return userId;
 }
 
-export const addDailyLog = mutation({
+const selfReportedArgs = {
+  codingHours: v.number(),
+  sleepHours: v.number(),
+  coffeeIntake: v.number(),
+  aiToolUsageMinutes: v.number(),
+  problemsSolved: v.number(),
+  taskDifficulty: v.number(),
+  experienceLevel: v.number(),
+  programmingScore: v.number(),
+};
+
+// Upsert rather than insert-or-error. The old behaviour rejected a second
+// submission for the same date, which made correcting a typo impossible
+// without going through the database directly.
+export const saveDailyLog = mutation({
   args: {
     date: v.string(),
-    codingHours: v.number(),
-    sleepHours: v.number(),
-    coffeeIntake: v.number(),
-    githubCommits: v.number(),
-    aiToolUsageMinutes: v.number(),
-    problemsSolved: v.number(),
-    taskDifficulty: v.number(),
-    experienceLevel: v.number(),
-    programmingScore: v.number(),
+    ...selfReportedArgs,
   },
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
+    assertValidDate(args.date);
     assertValidRanges(args);
+
     const existing = await ctx.db
       .query("dailyLogs")
       .withIndex("by_user_and_date", (q) => q.eq("userId", userId).eq("date", args.date))
       .unique();
+
     if (existing) {
-      throw new ConvexError(`A log for ${args.date} already exists`);
+      // An edited row is no longer synthetic, whatever it started as.
+      await ctx.db.patch(existing._id, { ...args, isSeeded: false, updatedAt: Date.now() });
+      return { logId: existing._id, created: false };
     }
-    return await ctx.db.insert("dailyLogs", { ...args, userId });
+
+    const logId = await ctx.db.insert("dailyLogs", {
+      ...args,
+      userId,
+      isSeeded: false,
+      updatedAt: Date.now(),
+    });
+    return { logId, created: true };
   },
 });
 
 export const updateDailyLog = mutation({
   args: {
     logId: v.id("dailyLogs"),
-    date: v.optional(v.string()),
     codingHours: v.optional(v.number()),
     sleepHours: v.optional(v.number()),
     coffeeIntake: v.optional(v.number()),
-    githubCommits: v.optional(v.number()),
     aiToolUsageMinutes: v.optional(v.number()),
     problemsSolved: v.optional(v.number()),
     taskDifficulty: v.optional(v.number()),
@@ -107,6 +108,7 @@ export const updateDailyLog = mutation({
     const userId = await requireUserId(ctx);
     const { logId, ...updates } = args;
     assertValidRanges(updates);
+
     const existing = await ctx.db.get(logId);
     if (!existing) {
       throw new ConvexError("Log not found");
@@ -114,33 +116,29 @@ export const updateDailyLog = mutation({
     if (existing.userId !== userId) {
       throw new ConvexError("Not authorized to modify this log");
     }
-    await ctx.db.patch(logId, updates);
+
+    await ctx.db.patch(logId, { ...updates, isSeeded: false, updatedAt: Date.now() });
     return logId;
   },
 });
 
-// Called by the github.syncGithubCommits action to write back a fetched
-// commit count. Internal because it isn't meant to be called directly
-// by clients (they go through the action, which derives the authenticated
-// user itself and validates the GitHub username first).
-export const setGithubCommits = internalMutation({
-  args: {
-    userId: v.id("users"),
-    date: v.string(),
-    githubCommits: v.number(),
-  },
-  handler: async (ctx, { userId, date, githubCommits }) => {
-    const existing = await ctx.db
-      .query("dailyLogs")
-      .withIndex("by_user_and_date", (q) => q.eq("userId", userId).eq("date", date))
-      .unique();
+export const deleteDailyLog = mutation({
+  args: { logId: v.id("dailyLogs") },
+  handler: async (ctx, { logId }) => {
+    const userId = await requireUserId(ctx);
+    const existing = await ctx.db.get(logId);
     if (!existing) {
-      throw new ConvexError(`No log entry for ${date} yet. Create one first.`);
+      throw new ConvexError("Log not found");
     }
-    await ctx.db.patch(existing._id, { githubCommits });
+    if (existing.userId !== userId) {
+      throw new ConvexError("Not authorized to delete this log");
+    }
+    await ctx.db.delete(logId);
   },
 });
 
+// Raw self-reported rows. Most of the UI reads analytics.getDataset instead,
+// which joins these to the measured layer.
 export const getLogsInRange = query({
   args: {
     startDate: v.string(),
@@ -158,67 +156,14 @@ export const getLogsInRange = query({
   },
 });
 
-export const getRollingAverages = query({
-  args: {
-    startDate: v.string(),
-    endDate: v.string(),
-  },
-  handler: async (ctx, { startDate, endDate }) => {
+export const getLogForDate = query({
+  args: { date: v.string() },
+  handler: async (ctx, { date }) => {
     const userId = await getAuthUserId(ctx);
-    if (!userId) return [];
-
-    const bufferStart = shiftDateString(startDate, -6);
-    const logs = await ctx.db
+    if (!userId) return null;
+    return await ctx.db
       .query("dailyLogs")
-      .withIndex("by_user_and_date", (q) =>
-        q.eq("userId", userId).gte("date", bufferStart).lte("date", endDate),
-      )
-      .collect();
-
-    return logs
-      .filter((log) => log.date >= startDate)
-      .map((log) => {
-        const windowStart = shiftDateString(log.date, -6);
-        const window = logs.filter((l) => l.date >= windowStart && l.date <= log.date);
-        const averages = {};
-        for (const field of NUMERIC_FIELDS) {
-          averages[field] = window.reduce((sum, l) => sum + l[field], 0) / window.length;
-        }
-        return { date: log.date, sampleSize: window.length, averages };
-      });
-  },
-});
-
-export const getCorrelationMatrix = query({
-  args: {
-    startDate: v.optional(v.string()),
-    endDate: v.optional(v.string()),
-  },
-  handler: async (ctx, { startDate, endDate }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) return { sampleSize: 0, matrix: {} };
-
-    const logs = await ctx.db
-      .query("dailyLogs")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
-      .collect();
-
-    const filtered = logs.filter(
-      (log) =>
-        (startDate === undefined || log.date >= startDate) &&
-        (endDate === undefined || log.date <= endDate),
-    );
-
-    const matrix = {};
-    for (const fieldA of NUMERIC_FIELDS) {
-      matrix[fieldA] = {};
-      for (const fieldB of NUMERIC_FIELDS) {
-        matrix[fieldA][fieldB] = pearsonCorrelation(
-          filtered.map((l) => l[fieldA]),
-          filtered.map((l) => l[fieldB]),
-        );
-      }
-    }
-    return { sampleSize: filtered.length, matrix };
+      .withIndex("by_user_and_date", (q) => q.eq("userId", userId).eq("date", date))
+      .unique();
   },
 });

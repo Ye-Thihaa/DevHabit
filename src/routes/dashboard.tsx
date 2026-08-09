@@ -6,12 +6,15 @@ import { useEffect } from "react";
 
 import { AppNav } from "@/components/app-nav";
 import { CorrelationsCard } from "@/components/dashboard/correlations-card";
+import { DataQualityCard } from "@/components/dashboard/data-quality-card";
+import { DescriptiveCard } from "@/components/dashboard/descriptive-card";
 import { GithubSyncCard } from "@/components/dashboard/github-sync-card";
+import { LagCard } from "@/components/dashboard/lag-card";
 import { PredictionCard } from "@/components/dashboard/prediction-card";
 import { TrendsCard } from "@/components/dashboard/trends-card";
 import { WeeklySummaryCard } from "@/components/dashboard/weekly-summary-card";
+import type { SummaryStats } from "@/lib/analytics-types";
 import { api } from "@convex/_generated/api";
-import type { Doc } from "@convex/_generated/dataModel";
 
 export const Route = createFileRoute("/dashboard")({
   head: () => ({
@@ -20,7 +23,7 @@ export const Route = createFileRoute("/dashboard")({
       {
         name: "description",
         content:
-          "Commit sync, weekly AI summaries, predictions, trend charts and a correlation matrix across your logged coding habits.",
+          "GitHub ingestion, descriptive statistics, correlations with significance, lagged effects, predictions and a data-quality report across your coding habits.",
       },
       { property: "og:title", content: "Dashboard — devhabit" },
       {
@@ -32,12 +35,6 @@ export const Route = createFileRoute("/dashboard")({
   component: Dashboard,
 });
 
-function daysAgoStr(days: number) {
-  const d = new Date();
-  d.setDate(d.getDate() - days);
-  return d.toISOString().slice(0, 10);
-}
-
 function Dashboard() {
   const navigate = useNavigate();
   const { isLoading, isAuthenticated } = useConvexAuth();
@@ -48,30 +45,20 @@ function Dashboard() {
     }
   }, [isLoading, isAuthenticated, navigate]);
 
-  const last7 = useQuery(
-    api.dailyLogs.getLogsInRange,
-    isAuthenticated ? { startDate: daysAgoStr(6), endDate: daysAgoStr(0) } : "skip",
+  const summary: SummaryStats | null | undefined = useQuery(
+    api.analytics.getSummaryStats,
+    isAuthenticated ? { days: 7 } : "skip",
   );
 
-  const stats = last7
+  const stats = summary
     ? [
-        {
-          label: "Coding hours (7d)",
-          value: last7.reduce((s: number, e: Doc<"dailyLogs">) => s + e.codingHours, 0).toFixed(1),
-        },
-        {
-          label: "Commits (7d)",
-          value: last7.reduce((s: number, e: Doc<"dailyLogs">) => s + e.githubCommits, 0),
-        },
+        { label: "Coding hours (7d)", value: summary.codingHours.toFixed(1) },
+        { label: "Commits (7d)", value: String(summary.commits) },
         {
           label: "Avg sleep (7d)",
-          value: last7.length
-            ? (
-                last7.reduce((s: number, e: Doc<"dailyLogs">) => s + e.sleepHours, 0) / last7.length
-              ).toFixed(1)
-            : "0.0",
+          value: summary.avgSleep === null ? "—" : summary.avgSleep.toFixed(1),
         },
-        { label: "Days logged (7d)", value: last7.length },
+        { label: "Days logged (7d)", value: `${summary.daysLogged}/7` },
       ]
     : null;
 
@@ -89,7 +76,8 @@ function Dashboard() {
       <main className="mx-auto max-w-5xl px-4 py-8 sm:py-12">
         <h1 className="text-2xl font-semibold sm:text-3xl">Dashboard</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Everything derived from your logs — synced commits, weekly reads, and the statistics.
+          Commits, pull requests and reviews are measured from the GitHub API. Sleep, coffee, focus
+          and self-ratings come from your daily log. The analysis keeps the two apart.
         </p>
 
         <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -104,12 +92,21 @@ function Dashboard() {
           ))}
         </div>
 
+        {summary && summary.seededDays > 0 && (
+          <p className="mt-3 rounded-lg border border-chart-5/40 bg-chart-5/10 px-3 py-2 text-xs">
+            {summary.seededDays} of the last 7 days are generated seed data, not real entries.
+          </p>
+        )}
+
         <div className="mt-6 space-y-5">
           <GithubSyncCard />
-          <WeeklySummaryCard />
-          <PredictionCard />
+          <DataQualityCard />
+          <DescriptiveCard />
           <TrendsCard />
           <CorrelationsCard />
+          <LagCard />
+          <PredictionCard />
+          <WeeklySummaryCard />
         </div>
       </main>
     </div>

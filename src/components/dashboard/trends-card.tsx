@@ -12,12 +12,13 @@ import {
 } from "recharts";
 
 import { Card } from "@/components/dashboard/card";
+import type { DatasetRow, RollingRow } from "@/lib/analytics-types";
 import { FIELDS, type FieldKey } from "@/lib/fields";
+import { daysAgoStr } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 import { api } from "@convex/_generated/api";
-import type { Doc } from "@convex/_generated/dataModel";
 
-const RANGES = [7, 30, 90] as const;
+const RANGES = [7, 30, 90, 365] as const;
 const COLORS = [
   "var(--color-chart-1)",
   "var(--color-chart-2)",
@@ -27,33 +28,44 @@ const COLORS = [
   "var(--color-chart-6)",
 ];
 
-function daysAgoStr(days: number) {
-  const d = new Date();
-  d.setDate(d.getDate() - days);
-  return d.toISOString().slice(0, 10);
-}
-
 export function TrendsCard() {
-  const [range, setRange] = useState<number>(30);
+  const [range, setRange] = useState<number>(90);
+  const [smooth, setSmooth] = useState(true);
   const [selected, setSelected] = useState<FieldKey[]>([
     "codingHours",
     "sleepHours",
-    "githubCommits",
+    "commits",
     "programmingScore",
   ]);
 
-  const logs = useQuery(api.dailyLogs.getLogsInRange, {
-    startDate: daysAgoStr(range - 1),
-    endDate: daysAgoStr(0),
+  const startDate = daysAgoStr(range - 1);
+  const endDate = daysAgoStr(0);
+
+  const raw: DatasetRow[] | undefined = useQuery(api.analytics.getDataset, { startDate, endDate });
+  const rolling: RollingRow[] | undefined = useQuery(api.analytics.getRollingAverages, {
+    startDate,
+    endDate,
+    windowDays: 7,
   });
 
-  const data = (logs ?? []).map((e: Doc<"dailyLogs">) => ({ ...e, label: e.date.slice(5) }));
+  const loading = raw === undefined || rolling === undefined;
+
+  // Daily values on a 90-day window are mostly noise; the 7-day rolling mean is
+  // what makes a trend legible. Both are available because the raw series is
+  // what the statistics are actually computed from.
+  const data = smooth
+    ? (rolling ?? []).map((r) => ({ date: r.date, label: r.date.slice(5), ...r.averages }))
+    : (raw ?? []).map((r) => ({ ...r, label: r.date.slice(5) }));
 
   const toggle = (key: FieldKey) =>
     setSelected((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
 
   return (
-    <Card title="Trends" description="How each tracked field moves over time." icon={ChartSpline}>
+    <Card
+      title="Trends"
+      description="How each field moves over time, self-reported and measured on the same axis."
+      icon={ChartSpline}
+    >
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex rounded-lg border border-border p-0.5">
           {RANGES.map((r) => (
@@ -68,12 +80,21 @@ export function TrendsCard() {
                   : "text-muted-foreground hover:text-foreground",
               )}
             >
-              Last {r}d
+              {r === 365 ? "1y" : `${r}d`}
             </button>
           ))}
         </div>
+        <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+          <input
+            type="checkbox"
+            checked={smooth}
+            onChange={(e) => setSmooth(e.target.checked)}
+            className="size-3.5 accent-[var(--color-primary)]"
+          />
+          7-day rolling mean
+        </label>
         <span className="font-mono text-xs text-muted-foreground">
-          {logs === undefined ? "Loading…" : `${data.length} days of data available`}
+          {loading ? "Loading…" : `${raw?.length ?? 0} days with data`}
         </span>
       </div>
 
@@ -86,12 +107,19 @@ export function TrendsCard() {
               type="button"
               onClick={() => toggle(f.key)}
               className={cn(
-                "rounded-full border px-3 py-1 text-xs transition-colors",
+                "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition-colors",
                 active
                   ? "border-primary/40 bg-primary/10 text-foreground"
                   : "border-border text-muted-foreground hover:text-foreground",
               )}
             >
+              <span
+                aria-hidden
+                className={cn(
+                  "size-1.5 rounded-full",
+                  f.source === "github" ? "bg-chart-2" : "bg-chart-5",
+                )}
+              />
               {f.label}
             </button>
           );
@@ -104,9 +132,11 @@ export function TrendsCard() {
             <p className="text-sm text-muted-foreground">Select at least one field to plot.</p>
           </div>
         ) : data.length === 0 ? (
-          <div className="grid h-full place-items-center rounded-xl border border-dashed border-border">
+          <div className="grid h-full place-items-center rounded-xl border border-dashed border-border px-6 text-center">
             <p className="text-sm text-muted-foreground">
-              {logs === undefined ? "Loading…" : "No logs in this range yet."}
+              {loading
+                ? "Loading…"
+                : "No data in this range yet — back-fill from GitHub or add a daily log."}
             </p>
           </div>
         ) : (
@@ -117,6 +147,7 @@ export function TrendsCard() {
                 dataKey="label"
                 tick={{ fontSize: 11, fill: "var(--color-muted-foreground)" }}
                 stroke="var(--color-border)"
+                minTickGap={24}
               />
               <YAxis
                 tick={{ fontSize: 11, fill: "var(--color-muted-foreground)" }}
@@ -130,6 +161,9 @@ export function TrendsCard() {
                   fontSize: 12,
                   color: "var(--color-popover-foreground)",
                 }}
+                formatter={(value: number | string) =>
+                  typeof value === "number" ? value.toFixed(2) : value
+                }
               />
               {selected.map((key, i) => (
                 <Line
@@ -140,12 +174,18 @@ export function TrendsCard() {
                   stroke={COLORS[i % COLORS.length] ?? COLORS[0]}
                   strokeWidth={2}
                   dot={false}
+                  connectNulls={false}
                 />
               ))}
             </LineChart>
           </ResponsiveContainer>
         )}
       </div>
+
+      <p className="mt-3 text-xs text-muted-foreground">
+        Gaps in a line are days with no data for that field — they are not zeros, and the statistics
+        drop them rather than filling them in.
+      </p>
     </Card>
   );
 }

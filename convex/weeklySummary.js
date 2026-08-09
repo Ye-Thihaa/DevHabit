@@ -5,22 +5,72 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 
 const MODEL = "claude-opus-5";
 
-function buildPrompt(logs) {
-  return `You are analyzing a software developer's self-tracked daily habit logs for one week. Each entry has: date, codingHours, sleepHours, coffeeIntake, githubCommits, aiToolUsageMinutes, problemsSolved, taskDifficulty (1-5), experienceLevel (1-5), programmingScore (1-10).
-
-Here is the week's data as JSON:
-${JSON.stringify(logs, null, 2)}
-
-Write a short, plain-language summary (3-5 sentences) of notable patterns in this data. You may point out relationships between habits (sleep, coffee, coding hours, AI tool usage) and output (commits, problems solved) as observations about this specific week only. Do not claim that one variable caused another — this is a single week of self-reported data, not a controlled experiment. If the data is too sparse or inconsistent to say anything meaningful, say so plainly instead of speculating.`;
+// Strips the join bookkeeping and keeps provenance flags, so the model is told
+// which numbers were measured and which were typed in.
+function toPromptRows(rows) {
+  return rows.map((row) => ({
+    date: row.date,
+    selfReported: row.hasSelfReported
+      ? {
+          codingHours: row.codingHours,
+          sleepHours: row.sleepHours,
+          coffeeIntake: row.coffeeIntake,
+          aiToolUsageMinutes: row.aiToolUsageMinutes,
+          problemsSolved: row.problemsSolved,
+          taskDifficulty: row.taskDifficulty,
+          experienceLevel: row.experienceLevel,
+          programmingScore: row.programmingScore,
+          isSyntheticSeedData: row.isSeeded,
+        }
+      : null,
+    measuredFromGithub: row.hasGithub
+      ? {
+          commits: row.commits,
+          pullRequestsOpened: row.pullRequestsOpened,
+          issuesOpened: row.issuesOpened,
+          reviews: row.reviews,
+          additions: row.additions,
+          deletions: row.deletions,
+          reposTouched: row.reposTouched,
+          commitsByTimeOfDay: row.commitsByBucket,
+        }
+      : null,
+  }));
 }
 
-function buildMockSummary(logs) {
-  const avg = (field) => (logs.reduce((sum, l) => sum + l[field], 0) / logs.length).toFixed(1);
+function buildPrompt(rows, stats) {
+  return `You are analyzing one week of a software developer's tracked coding habits.
+
+The data has two provenances and you must respect the difference:
+- "selfReported" fields were typed in by the developer. They are subjective and subject to recall bias. A row flagged isSyntheticSeedData: true is GENERATED DEMO DATA — never describe it as something the developer actually did.
+- "measuredFromGithub" fields came from the GitHub API. They are objective, but only cover work that reached GitHub — private repos outside the token's scope, non-code work, and local commits are invisible.
+
+Days may be missing on either side; a null means no data, not a zero.
+
+Week's data as JSON:
+${JSON.stringify(rows, null, 2)}
+
+Descriptive summary of the same window:
+${JSON.stringify(stats, null, 2)}
+
+Write a short, plain-language summary (3-5 sentences) of notable patterns. You may point out relationships between habits and output as observations about this specific week only. Do NOT claim one variable caused another — this is a single week of partly self-reported data, not a controlled experiment. Do not quote a correlation coefficient; the sample is far too small. If the data is too sparse or inconsistent to say anything meaningful, say so plainly instead of speculating.`;
+}
+
+function buildMockSummary(rows) {
+  const withSelf = rows.filter((r) => r.selfReported);
+  const withGh = rows.filter((r) => r.measuredFromGithub);
+  const avg = (list, pick) => {
+    const values = list.map(pick).filter((v) => typeof v === "number");
+    if (values.length === 0) return "n/a";
+    return (values.reduce((a, b) => a + b, 0) / values.length).toFixed(1);
+  };
+
   return (
     "[Mock summary — set ANTHROPIC_API_KEY on this deployment for a real AI-generated one] " +
-    `Over ${logs.length} logged day(s), you averaged ${avg("codingHours")}h of coding, ` +
-    `${avg("sleepHours")}h of sleep, and solved ${avg("problemsSolved")} problem(s) per day, ` +
-    `with ${avg("githubCommits")} GitHub commit(s) per day on average.`
+    `${withSelf.length} day(s) self-reported, ${withGh.length} day(s) with GitHub data. ` +
+    `Average coding ${avg(withSelf, (r) => r.selfReported.codingHours)}h, ` +
+    `sleep ${avg(withSelf, (r) => r.selfReported.sleepHours)}h, ` +
+    `commits ${avg(withGh, (r) => r.measuredFromGithub.commits)}/day.`
   );
 }
 
@@ -35,18 +85,21 @@ export const generateWeeklySummary = action({
       throw new ConvexError("Not signed in");
     }
 
-    const logs = await ctx.runQuery(api.dailyLogs.getLogsInRange, {
-      startDate,
-      endDate,
-    });
+    const [dataset, stats] = await Promise.all([
+      ctx.runQuery(api.analytics.getDataset, { startDate, endDate }),
+      ctx.runQuery(api.analytics.getDescriptiveStats, { startDate, endDate }),
+    ]);
 
-    if (logs.length === 0) {
-      throw new ConvexError("No logs in that date range yet.");
+    if (dataset.length === 0) {
+      throw new ConvexError(
+        "No data in that range yet. Back-fill from GitHub or add a daily log first.",
+      );
     }
 
+    const rows = toPromptRows(dataset);
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) {
-      return buildMockSummary(logs);
+      return buildMockSummary(rows);
     }
 
     const response = await fetch("https://api.anthropic.com/v1/messages", {
@@ -60,13 +113,13 @@ export const generateWeeklySummary = action({
         model: MODEL,
         max_tokens: 1024,
         output_config: { effort: "low" },
-        messages: [{ role: "user", content: buildPrompt(logs) }],
+        messages: [{ role: "user", content: buildPrompt(rows, stats.rows) }],
       }),
     });
 
     if (!response.ok) {
       const text = await response.text();
-      throw new ConvexError(`Claude API error (${response.status}): ${text}`);
+      throw new ConvexError(`Claude API error (${response.status}): ${text.slice(0, 300)}`);
     }
 
     const data = await response.json();
