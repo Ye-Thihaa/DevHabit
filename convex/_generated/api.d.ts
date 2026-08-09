@@ -13,6 +13,7 @@ import type * as auth from "../auth.js";
 import type * as dailyLogs from "../dailyLogs.js";
 import type * as github from "../github.js";
 import type * as http from "../http.js";
+import type * as lib_commitFiles from "../lib/commitFiles.js";
 import type * as lib_fields from "../lib/fields.js";
 import type * as lib_stats from "../lib/stats.js";
 import type * as lib_thresholds from "../lib/thresholds.js";
@@ -35,6 +36,7 @@ declare const fullApi: ApiFromModules<{
   dailyLogs: typeof dailyLogs;
   github: typeof github;
   http: typeof http;
+  "lib/commitFiles": typeof lib_commitFiles;
   "lib/fields": typeof lib_fields;
   "lib/stats": typeof lib_stats;
   "lib/thresholds": typeof lib_thresholds;

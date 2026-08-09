@@ -65,8 +65,15 @@ async function buildDataset(ctx, userId, startDate, endDate, { includeSeeded = t
     row.pullRequestsOpened = gh ? gh.pullRequestsOpened : null;
     row.issuesOpened = gh ? gh.issuesOpened : null;
     row.reviews = gh ? gh.reviews : null;
+    // additions/deletions are the cleaned figures — generated files removed.
+    // The raw pair rides along for the data-quality view only; it is not an
+    // analysable field, because it mostly measures lockfile churn.
     row.additions = gh?.additions ?? null;
     row.deletions = gh?.deletions ?? null;
+    row.additionsRaw = gh?.additionsRaw ?? null;
+    row.deletionsRaw = gh?.deletionsRaw ?? null;
+    row.filesChanged = gh?.filesChanged ?? null;
+    row.filesExcluded = gh?.filesExcluded ?? null;
     row.reposTouched = gh?.reposTouched ?? null;
     row.nightCommits = gh?.commitsByBucket?.night ?? null;
     row.commitsByBucket = gh?.commitsByBucket ?? null;
@@ -418,7 +425,41 @@ export const getDataQuality = query({
       .order("desc")
       .take(8);
 
+    // How much of the raw diff volume was generated rather than written. On a
+    // JS project this is routinely over 99%, which is the whole argument for
+    // not using raw line counts as an output measure.
+    const cleaned = data.reduce(
+      (acc, row) => ({
+        additions: acc.additions + (row.additions ?? 0),
+        additionsRaw: acc.additionsRaw + (row.additionsRaw ?? 0),
+        deletions: acc.deletions + (row.deletions ?? 0),
+        deletionsRaw: acc.deletionsRaw + (row.deletionsRaw ?? 0),
+        filesChanged: acc.filesChanged + (row.filesChanged ?? 0),
+        filesExcluded: acc.filesExcluded + (row.filesExcluded ?? 0),
+      }),
+      {
+        additions: 0,
+        additionsRaw: 0,
+        deletions: 0,
+        deletionsRaw: 0,
+        filesChanged: 0,
+        filesExcluded: 0,
+      },
+    );
+
+    const user = await ctx.db.get(userId);
+
     return {
+      timezoneOffsetMinutes: user?.timezoneOffsetMinutes ?? null,
+      lineFiltering: {
+        ...cleaned,
+        excludedShare:
+          cleaned.additionsRaw + cleaned.deletionsRaw === 0
+            ? 0
+            : 1 -
+              (cleaned.additions + cleaned.deletions) /
+                (cleaned.additionsRaw + cleaned.deletionsRaw),
+      },
       totalDays: data.length,
       calendarDays: allDates.length,
       firstDate,

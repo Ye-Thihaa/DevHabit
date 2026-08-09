@@ -13,6 +13,7 @@ import { LagCard } from "@/components/dashboard/lag-card";
 import { PredictionCard } from "@/components/dashboard/prediction-card";
 import { TrendsCard } from "@/components/dashboard/trends-card";
 import { WeeklySummaryCard } from "@/components/dashboard/weekly-summary-card";
+import { useTimezoneSync } from "@/hooks/use-timezone-sync";
 import type { SummaryStats } from "@/lib/analytics-types";
 import { api } from "@convex/_generated/api";
 
@@ -38,6 +39,9 @@ export const Route = createFileRoute("/dashboard")({
 function Dashboard() {
   const navigate = useNavigate();
   const { isLoading, isAuthenticated } = useConvexAuth();
+
+  // Commit timestamps are bucketed by the developer's clock, not UTC.
+  useTimezoneSync();
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {

@@ -29,6 +29,14 @@ export default defineSchema({
     phoneVerificationTime: v.optional(v.number()),
     isAnonymous: v.optional(v.boolean()),
     githubUsername: v.optional(v.string()),
+    // Minutes AHEAD of UTC (Yangon = +390). Note this is the negation of
+    // JavaScript's Date.getTimezoneOffset(), which counts the other way — the
+    // sign is flipped at the call site so the stored value reads naturally.
+    //
+    // Commit timestamps arrive from GitHub in UTC. Bucketing them by UTC hour
+    // mislabels a Yangon developer's whole day by 6.5 hours: 20:00 local lands
+    // in the "afternoon" bucket, so "when do you code" comes out backwards.
+    timezoneOffsetMinutes: v.optional(v.number()),
   })
     .index("email", ["email"])
     .index("phone", ["phone"]),
@@ -64,8 +72,16 @@ export default defineSchema({
     reviews: v.number(),
     // Only present once a detailed sync has run for this day — the
     // contributions calendar gives counts but not diffs or timestamps.
+    //
+    // additions/deletions exclude generated files (lockfiles, node_modules,
+    // build output — see lib/commitFiles.js). The unfiltered figures are kept
+    // as *Raw so the cleaning step can be shown rather than just asserted.
     additions: v.optional(v.number()),
     deletions: v.optional(v.number()),
+    additionsRaw: v.optional(v.number()),
+    deletionsRaw: v.optional(v.number()),
+    filesChanged: v.optional(v.number()),
+    filesExcluded: v.optional(v.number()),
     reposTouched: v.optional(v.number()),
     commitsByBucket: v.optional(
       v.object({

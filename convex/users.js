@@ -28,3 +28,22 @@ export const setGithubUsername = mutation({
     await ctx.db.patch(userId, { githubUsername: trimmed });
   },
 });
+
+// Records the browser's UTC offset so commit timestamps can be bucketed by the
+// developer's own clock rather than UTC. Called automatically on the dashboard;
+// see the note on users.timezoneOffsetMinutes in schema.js for the sign
+// convention.
+export const setTimezoneOffset = mutation({
+  args: { timezoneOffsetMinutes: v.number() },
+  handler: async (ctx, { timezoneOffsetMinutes }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new ConvexError("Not signed in");
+    }
+    // Real offsets span UTC-12:00 to UTC+14:00.
+    if (timezoneOffsetMinutes < -720 || timezoneOffsetMinutes > 840) {
+      throw new ConvexError("Timezone offset out of range");
+    }
+    await ctx.db.patch(userId, { timezoneOffsetMinutes });
+  },
+});

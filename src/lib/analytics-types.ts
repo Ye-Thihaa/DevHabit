@@ -85,6 +85,16 @@ export type RollingRow = {
 };
 
 export type DataQuality = {
+  timezoneOffsetMinutes: number | null;
+  lineFiltering: {
+    additions: number;
+    additionsRaw: number;
+    deletions: number;
+    deletionsRaw: number;
+    filesChanged: number;
+    filesExcluded: number;
+    excludedShare: number;
+  };
   totalDays: number;
   calendarDays: number;
   firstDate?: string;

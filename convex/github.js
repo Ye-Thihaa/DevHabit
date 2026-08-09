@@ -3,6 +3,7 @@ import { v, ConvexError } from "convex/values";
 import { api, internal } from "./_generated/api";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { dateRange, daysBetween, shiftDateString } from "./lib/stats.js";
+import { GITHUB_FILE_LIST_LIMIT, summarizeCommitFiles } from "./lib/commitFiles.js";
 
 // Ingestion of the measured layer.
 //
@@ -45,6 +46,22 @@ function bucketForHour(hour) {
   return "evening";
 }
 
+// Shifts a UTC instant into the developer's local wall-clock time and returns
+// both the local calendar date and the local hour.
+//
+// Both matter. The hour decides the time-of-day bucket; the date decides which
+// day a commit is attributed to, and therefore which self-reported log row it
+// joins against. A commit at 20:00 UTC belongs to the next day in Yangon, and
+// pairing it with the wrong night's sleep is exactly the kind of silent
+// misalignment this analysis is supposed to avoid.
+function toLocalParts(isoTimestamp, offsetMinutes) {
+  const shifted = new Date(new Date(isoTimestamp).getTime() + offsetMinutes * 60_000);
+  return {
+    date: shifted.toISOString().slice(0, 10),
+    hour: shifted.getUTCHours(),
+  };
+}
+
 async function resolveUser(ctx) {
   const userId = await getAuthUserId(ctx);
   if (!userId) throw new ConvexError("Not signed in");
@@ -54,7 +71,13 @@ async function resolveUser(ctx) {
   if (!user.githubUsername) {
     throw new ConvexError("Link a GitHub username before syncing");
   }
-  return { userId, login: user.githubUsername };
+  return {
+    userId,
+    login: user.githubUsername,
+    // Falling back to 0 keeps the old UTC behaviour for users whose browser
+    // hasn't reported an offset yet, rather than failing the sync.
+    offsetMinutes: user.timezoneOffsetMinutes ?? 0,
+  };
 }
 
 // --- calendar backfill ---------------------------------------------------
@@ -85,11 +108,11 @@ const CONTRIBUTIONS_QUERY = `
   }
 `;
 
-function countByDate(repositories) {
+function countByDate(repositories, offsetMinutes) {
   const counts = {};
   for (const repo of repositories ?? []) {
     for (const node of repo.contributions?.nodes ?? []) {
-      const date = node.occurredAt.slice(0, 10);
+      const { date } = toLocalParts(node.occurredAt, offsetMinutes);
       counts[date] = (counts[date] ?? 0) + 1;
     }
   }
@@ -103,7 +126,7 @@ export const backfillCalendar = action({
     days: v.optional(v.number()),
   },
   handler: async (ctx, { days = MAX_CALENDAR_DAYS }) => {
-    const { userId, login } = await resolveUser(ctx);
+    const { userId, login, offsetMinutes } = await resolveUser(ctx);
     const token = requireToken();
 
     const span = Math.min(Math.max(Math.floor(days), 1), MAX_CALENDAR_DAYS);
@@ -165,9 +188,12 @@ export const backfillCalendar = action({
       throw new ConvexError(`GitHub user "${login}" not found or not visible with this token.`);
     }
 
-    const prByDate = countByDate(collection.pullRequestContributionsByRepository);
-    const issueByDate = countByDate(collection.issueContributionsByRepository);
-    const reviewByDate = countByDate(collection.pullRequestReviewContributionsByRepository);
+    const prByDate = countByDate(collection.pullRequestContributionsByRepository, offsetMinutes);
+    const issueByDate = countByDate(collection.issueContributionsByRepository, offsetMinutes);
+    const reviewByDate = countByDate(
+      collection.pullRequestReviewContributionsByRepository,
+      offsetMinutes,
+    );
 
     const rows = [];
     for (const week of collection.contributionCalendar?.weeks ?? []) {
@@ -221,7 +247,7 @@ export const syncCommitDetail = action({
     endDate: v.string(),
   },
   handler: async (ctx, { startDate, endDate }) => {
-    const { userId, login } = await resolveUser(ctx);
+    const { userId, login, offsetMinutes } = await resolveUser(ctx);
     const token = requireToken();
 
     const span = daysBetween(startDate, endDate);
@@ -262,6 +288,10 @@ export const syncCommitDetail = action({
           date,
           additions: 0,
           deletions: 0,
+          additionsRaw: 0,
+          deletionsRaw: 0,
+          filesChanged: 0,
+          filesExcluded: 0,
           repos: new Set(),
           buckets: { night: 0, morning: 0, afternoon: 0, evening: 0 },
           commits: 0,
@@ -272,6 +302,7 @@ export const syncCommitDetail = action({
 
     let commitsInspected = 0;
     let truncated = false;
+    let commitsWithTruncatedFileList = 0;
 
     for (const repo of candidates) {
       if (commitsInspected >= MAX_COMMITS_PER_DETAIL_SYNC) {
@@ -279,10 +310,14 @@ export const syncCommitDetail = action({
         break;
       }
 
+      // GitHub filters by UTC instant, but the range we want is in local days.
+      // Widen by a day on each side and discard the overhang after converting
+      // each commit to its local date, so boundary commits aren't lost.
       const listUrl =
         `${GITHUB_REST}/repos/${repo.full_name}/commits` +
         `?author=${encodeURIComponent(login)}` +
-        `&since=${startDate}T00:00:00Z&until=${endDate}T23:59:59Z&per_page=100`;
+        `&since=${shiftDateString(startDate, -1)}T00:00:00Z` +
+        `&until=${shiftDateString(endDate, 1)}T23:59:59Z&per_page=100`;
 
       const listResponse = await fetch(listUrl, { headers });
       // 409 = empty repository, 404 = no access. Neither is fatal for the run.
@@ -304,23 +339,30 @@ export const syncCommitDetail = action({
         // would smear a day's work onto whenever the rebase happened.
         const authored = commit.commit?.author?.date;
         if (!authored) continue;
-        const date = authored.slice(0, 10);
+        const { date, hour } = toLocalParts(authored, offsetMinutes);
         if (date < startDate || date > endDate) continue;
 
         const acc = ensure(date);
         acc.commits++;
         acc.repos.add(repo.full_name);
-        acc.buckets[bucketForHour(new Date(authored).getUTCHours())]++;
+        acc.buckets[bucketForHour(hour)]++;
 
-        // The list endpoint omits diff stats; one extra request per commit.
+        // The list endpoint omits diff stats and the file list; one extra
+        // request per commit gets both.
         const detailResponse = await fetch(
           `${GITHUB_REST}/repos/${repo.full_name}/commits/${commit.sha}`,
           { headers },
         );
         if (detailResponse.ok) {
           const detail = await detailResponse.json();
-          acc.additions += detail.stats?.additions ?? 0;
-          acc.deletions += detail.stats?.deletions ?? 0;
+          const summary = summarizeCommitFiles(detail.files, detail.stats);
+          acc.additions += summary.additions;
+          acc.deletions += summary.deletions;
+          acc.additionsRaw += summary.rawAdditions;
+          acc.deletionsRaw += summary.rawDeletions;
+          acc.filesChanged += summary.filesChanged;
+          acc.filesExcluded += summary.filesExcluded;
+          if (summary.filesTruncated) commitsWithTruncatedFileList++;
         }
       }
     }
@@ -332,12 +374,31 @@ export const syncCommitDetail = action({
         commits: acc?.commits ?? 0,
         additions: acc?.additions ?? 0,
         deletions: acc?.deletions ?? 0,
+        additionsRaw: acc?.additionsRaw ?? 0,
+        deletionsRaw: acc?.deletionsRaw ?? 0,
+        filesChanged: acc?.filesChanged ?? 0,
+        filesExcluded: acc?.filesExcluded ?? 0,
         reposTouched: acc ? acc.repos.size : 0,
         commitsByBucket: acc?.buckets ?? { night: 0, morning: 0, afternoon: 0, evening: 0 },
       };
     });
 
     const written = await ctx.runMutation(internal.github.writeDetailDays, { userId, rows });
+
+    const notes = [];
+    if (truncated) {
+      notes.push(
+        `Stopped at the ${MAX_COMMITS_PER_DETAIL_SYNC}-commit cap — the range is only partly detailed.`,
+      );
+    }
+    if (commitsWithTruncatedFileList > 0) {
+      notes.push(
+        `${commitsWithTruncatedFileList} commit(s) exceeded GitHub's ${GITHUB_FILE_LIST_LIMIT}-file listing limit; their line counts are a floor, not a total.`,
+      );
+    }
+    if (offsetMinutes === 0) {
+      notes.push("No timezone offset recorded — times bucketed as UTC.");
+    }
 
     await ctx.runMutation(internal.github.recordSyncRun, {
       userId,
@@ -346,12 +407,27 @@ export const syncCommitDetail = action({
       endDate,
       daysWritten: written,
       status: "ok",
-      message: truncated
-        ? `Stopped at the ${MAX_COMMITS_PER_DETAIL_SYNC}-commit cap — the range is only partly detailed.`
-        : undefined,
+      message: notes.length > 0 ? notes.join(" ") : undefined,
     });
 
-    return { startDate, endDate, daysWritten: written, commitsInspected, truncated };
+    const totals = rows.reduce(
+      (acc, row) => ({
+        additions: acc.additions + row.additions,
+        additionsRaw: acc.additionsRaw + row.additionsRaw,
+        filesExcluded: acc.filesExcluded + row.filesExcluded,
+      }),
+      { additions: 0, additionsRaw: 0, filesExcluded: 0 },
+    );
+
+    return {
+      startDate,
+      endDate,
+      daysWritten: written,
+      commitsInspected,
+      truncated,
+      offsetMinutes,
+      ...totals,
+    };
   },
 });
 
@@ -409,6 +485,10 @@ export const writeDetailDays = internalMutation({
         commits: v.number(),
         additions: v.number(),
         deletions: v.number(),
+        additionsRaw: v.number(),
+        deletionsRaw: v.number(),
+        filesChanged: v.number(),
+        filesExcluded: v.number(),
         reposTouched: v.number(),
         commitsByBucket: v.object({
           night: v.number(),

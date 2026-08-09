@@ -142,8 +142,54 @@ export function DataQualityCard() {
             </div>
           )}
 
+          {quality.lineFiltering.additionsRaw > 0 && (
+            <div>
+              <h3 className="text-sm font-medium">Line-count cleaning</h3>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Raw GitHub diff stats count installed and generated files, so they measure lockfile
+                churn more than authorship. Lockfiles,{" "}
+                <code className="font-mono">node_modules</code>, build output, minified bundles and
+                binary assets are excluded before any line count is used.
+              </p>
+              <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 font-mono text-xs sm:grid-cols-4">
+                <Stat
+                  label="Lines counted"
+                  value={quality.lineFiltering.additions.toLocaleString()}
+                />
+                <Stat
+                  label="Raw (unfiltered)"
+                  value={quality.lineFiltering.additionsRaw.toLocaleString()}
+                />
+                <Stat
+                  label="Files kept"
+                  value={quality.lineFiltering.filesChanged.toLocaleString()}
+                />
+                <Stat
+                  label="Files excluded"
+                  value={quality.lineFiltering.filesExcluded.toLocaleString()}
+                />
+              </dl>
+              <p className="mt-2 text-xs text-muted-foreground">
+                <strong className="font-medium text-foreground">
+                  {(quality.lineFiltering.excludedShare * 100).toFixed(1)}%
+                </strong>{" "}
+                of the raw diff volume was generated rather than written.
+              </p>
+            </div>
+          )}
+
           <div>
             <h3 className="text-sm font-medium">Provenance</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {quality.timezoneOffsetMinutes === null
+                ? "No timezone recorded — commit times are bucketed as UTC, which mislabels time-of-day. Open the dashboard while signed in to set it, then re-run the detailed sync."
+                : `Commit times bucketed at UTC${quality.timezoneOffsetMinutes >= 0 ? "+" : "−"}${String(
+                    Math.floor(Math.abs(quality.timezoneOffsetMinutes) / 60),
+                  ).padStart(
+                    2,
+                    "0",
+                  )}:${String(Math.abs(quality.timezoneOffsetMinutes) % 60).padStart(2, "0")}, your local time.`}
+            </p>
             <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 font-mono text-xs sm:grid-cols-3">
               <Stat
                 label="Calendar-level GitHub days"
