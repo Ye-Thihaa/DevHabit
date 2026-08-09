@@ -15,14 +15,12 @@ import {
 } from "@/components/ui/select";
 import { FIELDS, type FieldKey } from "@/lib/fields";
 import { api } from "@convex/_generated/api";
-import type { Id } from "@convex/_generated/dataModel";
 
-export function PredictionCard({ userId }: { userId: Id<"users"> }) {
+export function PredictionCard() {
   const [predictor, setPredictor] = useState<FieldKey>("sleepHours");
   const [output, setOutput] = useState<FieldKey>("githubCommits");
   const [value, setValue] = useState("7.5");
   const [args, setArgs] = useState<{
-    userId: Id<"users">;
     predictorField: string;
     outputField: string;
     plannedValue: number;
@@ -33,7 +31,7 @@ export function PredictionCard({ userId }: { userId: Id<"users"> }) {
   const predict = () => {
     const n = Number(value);
     if (!Number.isFinite(n)) return;
-    setArgs({ userId, predictorField: predictor, outputField: output, plannedValue: n });
+    setArgs({ predictorField: predictor, outputField: output, plannedValue: n });
   };
 
   const outLabel = FIELDS.find((f) => f.key === output)?.label ?? "";

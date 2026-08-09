@@ -1,14 +1,19 @@
 import { action } from "./_generated/server";
 import { v, ConvexError } from "convex/values";
 import { api, internal } from "./_generated/api";
+import { getAuthUserId } from "@convex-dev/auth/server";
 
 export const syncGithubCommits = action({
   args: {
-    userId: v.id("users"),
     date: v.string(),
   },
-  handler: async (ctx, { userId, date }) => {
-    const user = await ctx.runQuery(api.users.getUser, { userId });
+  handler: async (ctx, { date }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new ConvexError("Not signed in");
+    }
+
+    const user = await ctx.runQuery(api.users.getCurrentUser);
     if (!user) {
       throw new ConvexError("User not found");
     }

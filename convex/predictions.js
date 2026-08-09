@@ -1,5 +1,6 @@
 import { query } from "./_generated/server";
 import { v, ConvexError } from "convex/values";
+import { getAuthUserId } from "@convex-dev/auth/server";
 
 const NUMERIC_FIELDS = [
   "codingHours",
@@ -37,14 +38,18 @@ function fitLinearRegression(xs, ys) {
 
 export const predictOutput = query({
   args: {
-    userId: v.id("users"),
     predictorField: v.string(),
     outputField: v.string(),
     plannedValue: v.number(),
   },
-  handler: async (ctx, { userId, predictorField, outputField, plannedValue }) => {
+  handler: async (ctx, { predictorField, outputField, plannedValue }) => {
     if (!NUMERIC_FIELDS.includes(predictorField) || !NUMERIC_FIELDS.includes(outputField)) {
       throw new ConvexError("Unknown field name");
+    }
+
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      return { sampleSize: 0, predicted: null, slope: null, intercept: null, rSquared: null };
     }
 
     const logs = await ctx.db

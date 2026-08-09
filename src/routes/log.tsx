@@ -1,9 +1,10 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation } from "convex/react";
+import { useConvexAuth } from "@convex-dev/auth/react";
 import { ConvexError } from "convex/values";
 import { format } from "date-fns";
 import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { AppNav } from "@/components/app-nav";
 import { DatePicker } from "@/components/date-picker";
@@ -17,7 +18,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useCurrentUserId } from "@/hooks/use-current-user";
 import { cn } from "@/lib/utils";
 import { api } from "@convex/_generated/api";
 
@@ -64,8 +64,15 @@ const scaleFields = [
 ];
 
 function DailyLog() {
-  const userId = useCurrentUserId();
+  const navigate = useNavigate();
+  const { isLoading, isAuthenticated } = useConvexAuth();
   const addDailyLog = useMutation(api.dailyLogs.addDailyLog);
+
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      navigate({ to: "/login" });
+    }
+  }, [isLoading, isAuthenticated, navigate]);
 
   const [date, setDate] = useState<Date | undefined>(new Date());
   const [values, setValues] = useState<Record<string, string>>({
@@ -120,13 +127,12 @@ function DailyLog() {
       });
       return;
     }
-    if (!userId || !date) return;
+    if (!isAuthenticated || !date) return;
 
     setSaving(true);
     setStatus(null);
     try {
       await addDailyLog({
-        userId,
         date: format(date, "yyyy-MM-dd"),
         codingHours: Number(values["codingHours"]),
         sleepHours: Number(values["sleepHours"]),
@@ -151,6 +157,14 @@ function DailyLog() {
       setSaving(false);
     }
   };
+
+  if (isLoading || !isAuthenticated) {
+    return (
+      <div className="grid min-h-screen place-items-center">
+        <Loader2 className="size-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen">
@@ -244,7 +258,7 @@ function DailyLog() {
           )}
 
           <div className="mt-7 flex flex-wrap items-center gap-3">
-            <Button type="submit" disabled={saving || !userId}>
+            <Button type="submit" disabled={saving}>
               {saving && <Loader2 className="size-4 animate-spin" />}
               {saving ? "Saving…" : "Save Log"}
             </Button>

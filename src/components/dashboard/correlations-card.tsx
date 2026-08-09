@@ -4,7 +4,6 @@ import { useQuery } from "convex/react";
 import { Card } from "@/components/dashboard/card";
 import { FIELDS } from "@/lib/fields";
 import { api } from "@convex/_generated/api";
-import type { Id } from "@convex/_generated/dataModel";
 
 function cellStyle(v: number) {
   const pct = Math.round(Math.abs(v) * 70);
@@ -14,8 +13,8 @@ function cellStyle(v: number) {
   };
 }
 
-export function CorrelationsCard({ userId }: { userId: Id<"users"> }) {
-  const result = useQuery(api.dailyLogs.getCorrelationMatrix, { userId });
+export function CorrelationsCard() {
+  const result = useQuery(api.dailyLogs.getCorrelationMatrix, {});
 
   return (
     <Card

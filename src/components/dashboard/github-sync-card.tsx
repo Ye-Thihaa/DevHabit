@@ -10,10 +10,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/dashboard/card";
 import { api } from "@convex/_generated/api";
-import type { Id } from "@convex/_generated/dataModel";
 
-export function GithubSyncCard({ userId }: { userId: Id<"users"> }) {
-  const user = useQuery(api.users.getUser, { userId });
+export function GithubSyncCard() {
+  const user = useQuery(api.users.getCurrentUser);
   const setGithubUsername = useMutation(api.users.setGithubUsername);
   const syncGithubCommits = useAction(api.github.syncGithubCommits);
 
@@ -25,7 +24,7 @@ export function GithubSyncCard({ userId }: { userId: Id<"users"> }) {
 
   const handleSave = async () => {
     if (!draft.trim()) return;
-    await setGithubUsername({ userId, githubUsername: draft.trim() });
+    await setGithubUsername({ githubUsername: draft.trim() });
     setDraft("");
   };
 
@@ -35,7 +34,7 @@ export function GithubSyncCard({ userId }: { userId: Id<"users"> }) {
     setSynced(null);
     setError(null);
     try {
-      const count = await syncGithubCommits({ userId, date: format(date, "yyyy-MM-dd") });
+      const count = await syncGithubCommits({ date: format(date, "yyyy-MM-dd") });
       setSynced(`${count} commit(s) found and written to that day's log.`);
     } catch (err) {
       setError(err instanceof ConvexError ? (err.data as string) : "Failed to sync commits.");

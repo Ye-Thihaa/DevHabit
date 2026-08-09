@@ -1,8 +1,10 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { LogOut, Settings, Terminal, User } from "lucide-react";
+import { useQuery } from "convex/react";
+import { useAuthActions } from "@convex-dev/auth/react";
+import { LogOut, Terminal } from "lucide-react";
 
 import { ThemeToggle } from "@/components/theme-toggle";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -12,14 +14,26 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-// No auth system yet — this is a cosmetic placeholder, not a real session.
-const MOCK_USER = { name: "Demo User", handle: "you", initials: "DU" };
+import { api } from "@convex/_generated/api";
 
 const linkClass =
   "rounded-md px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground";
 
+function initialsOf(name: string) {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
+}
+
 export function AppNav() {
   const navigate = useNavigate();
+  const { signOut } = useAuthActions();
+  const user = useQuery(api.users.getCurrentUser);
+
+  const displayName = user?.name ?? user?.githubUsername ?? "Signed in";
 
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur">
@@ -60,28 +74,28 @@ export function AppNav() {
                 aria-label="Account menu"
               >
                 <Avatar className="size-7">
+                  {user?.image && <AvatarImage src={user.image} alt={displayName} />}
                   <AvatarFallback className="bg-secondary text-xs font-medium">
-                    {MOCK_USER.initials}
+                    {initialsOf(displayName) || "?"}
                   </AvatarFallback>
                 </Avatar>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-52">
               <DropdownMenuLabel className="flex flex-col">
-                <span className="text-sm">{MOCK_USER.name}</span>
-                <span className="font-mono text-xs font-normal text-muted-foreground">
-                  @{MOCK_USER.handle}
-                </span>
+                <span className="text-sm">{displayName}</span>
+                {user?.githubUsername && (
+                  <span className="font-mono text-xs font-normal text-muted-foreground">
+                    @{user.githubUsername}
+                  </span>
+                )}
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>
-                <User className="size-4" /> Profile
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <Settings className="size-4" /> Settings
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => navigate({ to: "/login" })}>
+              <DropdownMenuItem
+                onClick={() => {
+                  void signOut().then(() => navigate({ to: "/login" }));
+                }}
+              >
                 <LogOut className="size-4" /> Sign out
               </DropdownMenuItem>
             </DropdownMenuContent>

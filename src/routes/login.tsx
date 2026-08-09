@@ -1,12 +1,10 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { Github, Terminal } from "lucide-react";
-import { useState } from "react";
+import { useConvexAuth, useAuthActions } from "@convex-dev/auth/react";
+import { Github, Loader2, Terminal } from "lucide-react";
+import { useEffect, useState } from "react";
 
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
 
 export const Route = createFileRoute("/login")({
   head: () => ({
@@ -28,8 +26,15 @@ export const Route = createFileRoute("/login")({
 
 function LoginPage() {
   const navigate = useNavigate();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const { isLoading, isAuthenticated } = useConvexAuth();
+  const { signIn } = useAuthActions();
+  const [signingIn, setSigningIn] = useState(false);
+
+  useEffect(() => {
+    if (!isLoading && isAuthenticated) {
+      navigate({ to: "/dashboard" });
+    }
+  }, [isLoading, isAuthenticated, navigate]);
 
   return (
     <div className="relative flex min-h-screen flex-col">
@@ -48,65 +53,29 @@ function LoginPage() {
         <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-6 shadow-elevated sm:p-8">
           <h1 className="text-xl font-semibold">Welcome back</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Log today's entry and see where the week is heading.
+            Sign in with GitHub to log today's entry and see where the week is heading.
           </p>
-
-          <form
-            className="mt-6 space-y-4"
-            onSubmit={(e) => {
-              e.preventDefault();
-              navigate({ to: "/dashboard" });
-            }}
-          >
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                autoComplete="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="password">Password</Label>
-                <span className="font-mono text-xs text-muted-foreground">Forgot?</span>
-              </div>
-              <Input
-                id="password"
-                type="password"
-                autoComplete="current-password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </div>
-            <Button type="submit" className="w-full">
-              Sign In
-            </Button>
-          </form>
-
-          <div className="my-6 flex items-center gap-3">
-            <Separator className="flex-1" />
-            <span className="font-mono text-xs text-muted-foreground">or</span>
-            <Separator className="flex-1" />
-          </div>
 
           <Button
             variant="outline"
-            className="w-full"
-            onClick={() => navigate({ to: "/dashboard" })}
+            className="mt-6 w-full"
+            disabled={signingIn}
+            onClick={() => {
+              setSigningIn(true);
+              void signIn("github").catch(() => setSigningIn(false));
+            }}
           >
-            <Github className="size-4" /> Continue with GitHub
+            {signingIn ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Github className="size-4" />
+            )}
+            {signingIn ? "Redirecting to GitHub…" : "Continue with GitHub"}
           </Button>
 
-          <p className="mt-6 text-center text-sm text-muted-foreground">
-            Don't have an account?{" "}
-            <Link to="/login" className="text-foreground underline underline-offset-4">
-              Sign up
-            </Link>
+          <p className="mt-6 text-center text-xs text-muted-foreground">
+            We only use your GitHub username and public profile — no repo access, no write
+            permissions.
           </p>
         </div>
       </main>

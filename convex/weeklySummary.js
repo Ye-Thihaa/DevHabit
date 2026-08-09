@@ -1,6 +1,7 @@
 import { action } from "./_generated/server";
 import { v, ConvexError } from "convex/values";
 import { api } from "./_generated/api";
+import { getAuthUserId } from "@convex-dev/auth/server";
 
 const MODEL = "claude-opus-5";
 
@@ -25,13 +26,16 @@ function buildMockSummary(logs) {
 
 export const generateWeeklySummary = action({
   args: {
-    userId: v.id("users"),
     startDate: v.string(),
     endDate: v.string(),
   },
-  handler: async (ctx, { userId, startDate, endDate }) => {
+  handler: async (ctx, { startDate, endDate }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new ConvexError("Not signed in");
+    }
+
     const logs = await ctx.runQuery(api.dailyLogs.getLogsInRange, {
-      userId,
       startDate,
       endDate,
     });

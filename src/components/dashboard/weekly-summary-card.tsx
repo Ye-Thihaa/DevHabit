@@ -6,7 +6,6 @@ import { ConvexError } from "convex/values";
 import { Card } from "@/components/dashboard/card";
 import { Button } from "@/components/ui/button";
 import { api } from "@convex/_generated/api";
-import type { Id } from "@convex/_generated/dataModel";
 
 function daysAgoStr(days: number) {
   const d = new Date();
@@ -14,7 +13,7 @@ function daysAgoStr(days: number) {
   return d.toISOString().slice(0, 10);
 }
 
-export function WeeklySummaryCard({ userId }: { userId: Id<"users"> }) {
+export function WeeklySummaryCard() {
   const generateWeeklySummary = useAction(api.weeklySummary.generateWeeklySummary);
   const [loading, setLoading] = useState(false);
   const [summary, setSummary] = useState<string | null>(null);
@@ -28,7 +27,7 @@ export function WeeklySummaryCard({ userId }: { userId: Id<"users"> }) {
     const startDate = daysAgoStr(6);
     const endDate = daysAgoStr(0);
     try {
-      const result = await generateWeeklySummary({ userId, startDate, endDate });
+      const result = await generateWeeklySummary({ startDate, endDate });
       setSummary(result);
       setRange({ start: startDate, end: endDate });
     } catch (err) {

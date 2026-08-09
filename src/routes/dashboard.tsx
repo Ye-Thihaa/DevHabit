@@ -1,5 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
+import { useConvexAuth } from "@convex-dev/auth/react";
+import { Loader2 } from "lucide-react";
+import { useEffect } from "react";
 
 import { AppNav } from "@/components/app-nav";
 import { CorrelationsCard } from "@/components/dashboard/correlations-card";
@@ -7,7 +10,6 @@ import { GithubSyncCard } from "@/components/dashboard/github-sync-card";
 import { PredictionCard } from "@/components/dashboard/prediction-card";
 import { TrendsCard } from "@/components/dashboard/trends-card";
 import { WeeklySummaryCard } from "@/components/dashboard/weekly-summary-card";
-import { useCurrentUserId } from "@/hooks/use-current-user";
 import { api } from "@convex/_generated/api";
 import type { Doc } from "@convex/_generated/dataModel";
 
@@ -37,11 +39,18 @@ function daysAgoStr(days: number) {
 }
 
 function Dashboard() {
-  const userId = useCurrentUserId();
+  const navigate = useNavigate();
+  const { isLoading, isAuthenticated } = useConvexAuth();
+
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      navigate({ to: "/login" });
+    }
+  }, [isLoading, isAuthenticated, navigate]);
 
   const last7 = useQuery(
     api.dailyLogs.getLogsInRange,
-    userId ? { userId, startDate: daysAgoStr(6), endDate: daysAgoStr(0) } : "skip",
+    isAuthenticated ? { startDate: daysAgoStr(6), endDate: daysAgoStr(0) } : "skip",
   );
 
   const stats = last7
@@ -66,6 +75,14 @@ function Dashboard() {
       ]
     : null;
 
+  if (isLoading || !isAuthenticated) {
+    return (
+      <div className="grid min-h-screen place-items-center">
+        <Loader2 className="size-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen">
       <AppNav />
@@ -87,15 +104,13 @@ function Dashboard() {
           ))}
         </div>
 
-        {userId && (
-          <div className="mt-6 space-y-5">
-            <GithubSyncCard userId={userId} />
-            <WeeklySummaryCard userId={userId} />
-            <PredictionCard userId={userId} />
-            <TrendsCard userId={userId} />
-            <CorrelationsCard userId={userId} />
-          </div>
-        )}
+        <div className="mt-6 space-y-5">
+          <GithubSyncCard />
+          <WeeklySummaryCard />
+          <PredictionCard />
+          <TrendsCard />
+          <CorrelationsCard />
+        </div>
       </main>
     </div>
   );

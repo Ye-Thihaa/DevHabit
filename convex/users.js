@@ -1,36 +1,26 @@
 import { mutation, query } from "./_generated/server";
 import { v, ConvexError } from "convex/values";
+import { getAuthUserId } from "@convex-dev/auth/server";
 
-// No auth system yet, so the app identifies a browser by a random
-// deviceId it generates and caches in localStorage (see
-// useCurrentUser.js), and looks up/creates a user per deviceId here.
-// Every device gets its own user and its own private set of logs.
-export const getOrCreateDemoUser = mutation({
-  args: { deviceId: v.string() },
-  handler: async (ctx, { deviceId }) => {
-    const existing = await ctx.db
-      .query("users")
-      .withIndex("by_device", (q) => q.eq("deviceId", deviceId))
-      .unique();
-    if (existing) {
-      return existing._id;
-    }
-    return await ctx.db.insert("users", {
-      name: "Demo User",
-      email: `${deviceId}@local`,
-      deviceId,
-    });
+// The signed-in user's own profile, or null if not signed in. githubUsername
+// is normally populated automatically on first GitHub sign-in (see
+// convex/auth.ts); this just reads whatever is on the user record.
+export const getCurrentUser = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return null;
+    return await ctx.db.get(userId);
   },
 });
 
-export const getUser = query({
-  args: { userId: v.id("users") },
-  handler: async (ctx, { userId }) => await ctx.db.get(userId),
-});
-
 export const setGithubUsername = mutation({
-  args: { userId: v.id("users"), githubUsername: v.string() },
-  handler: async (ctx, { userId, githubUsername }) => {
+  args: { githubUsername: v.string() },
+  handler: async (ctx, { githubUsername }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new ConvexError("Not signed in");
+    }
     const trimmed = githubUsername.trim();
     if (!trimmed) {
       throw new ConvexError("GitHub username cannot be empty");

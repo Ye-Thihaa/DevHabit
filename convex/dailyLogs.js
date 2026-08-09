@@ -1,5 +1,6 @@
 import { mutation, query, internalMutation } from "./_generated/server";
 import { v, ConvexError } from "convex/values";
+import { getAuthUserId } from "@convex-dev/auth/server";
 
 const NUMERIC_FIELDS = [
   "codingHours",
@@ -53,9 +54,16 @@ function pearsonCorrelation(xs, ys) {
   return (n * sumXY - sumX * sumY) / denominator;
 }
 
+async function requireUserId(ctx) {
+  const userId = await getAuthUserId(ctx);
+  if (!userId) {
+    throw new ConvexError("Not signed in");
+  }
+  return userId;
+}
+
 export const addDailyLog = mutation({
   args: {
-    userId: v.id("users"),
     date: v.string(),
     codingHours: v.number(),
     sleepHours: v.number(),
@@ -68,21 +76,21 @@ export const addDailyLog = mutation({
     programmingScore: v.number(),
   },
   handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
     assertValidRanges(args);
     const existing = await ctx.db
       .query("dailyLogs")
-      .withIndex("by_user_and_date", (q) => q.eq("userId", args.userId).eq("date", args.date))
+      .withIndex("by_user_and_date", (q) => q.eq("userId", userId).eq("date", args.date))
       .unique();
     if (existing) {
       throw new ConvexError(`A log for ${args.date} already exists`);
     }
-    return await ctx.db.insert("dailyLogs", args);
+    return await ctx.db.insert("dailyLogs", { ...args, userId });
   },
 });
 
 export const updateDailyLog = mutation({
   args: {
-    userId: v.id("users"),
     logId: v.id("dailyLogs"),
     date: v.optional(v.string()),
     codingHours: v.optional(v.number()),
@@ -96,7 +104,8 @@ export const updateDailyLog = mutation({
     programmingScore: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const { userId, logId, ...updates } = args;
+    const userId = await requireUserId(ctx);
+    const { logId, ...updates } = args;
     assertValidRanges(updates);
     const existing = await ctx.db.get(logId);
     if (!existing) {
@@ -112,8 +121,8 @@ export const updateDailyLog = mutation({
 
 // Called by the github.syncGithubCommits action to write back a fetched
 // commit count. Internal because it isn't meant to be called directly
-// by clients (they go through the action, which validates the GitHub
-// username first).
+// by clients (they go through the action, which derives the authenticated
+// user itself and validates the GitHub username first).
 export const setGithubCommits = internalMutation({
   args: {
     userId: v.id("users"),
@@ -134,11 +143,12 @@ export const setGithubCommits = internalMutation({
 
 export const getLogsInRange = query({
   args: {
-    userId: v.id("users"),
     startDate: v.string(),
     endDate: v.string(),
   },
-  handler: async (ctx, { userId, startDate, endDate }) => {
+  handler: async (ctx, { startDate, endDate }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
     return await ctx.db
       .query("dailyLogs")
       .withIndex("by_user_and_date", (q) =>
@@ -150,11 +160,13 @@ export const getLogsInRange = query({
 
 export const getRollingAverages = query({
   args: {
-    userId: v.id("users"),
     startDate: v.string(),
     endDate: v.string(),
   },
-  handler: async (ctx, { userId, startDate, endDate }) => {
+  handler: async (ctx, { startDate, endDate }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
+
     const bufferStart = shiftDateString(startDate, -6);
     const logs = await ctx.db
       .query("dailyLogs")
@@ -179,11 +191,13 @@ export const getRollingAverages = query({
 
 export const getCorrelationMatrix = query({
   args: {
-    userId: v.id("users"),
     startDate: v.optional(v.string()),
     endDate: v.optional(v.string()),
   },
-  handler: async (ctx, { userId, startDate, endDate }) => {
+  handler: async (ctx, { startDate, endDate }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return { sampleSize: 0, matrix: {} };
+
     const logs = await ctx.db
       .query("dailyLogs")
       .withIndex("by_user", (q) => q.eq("userId", userId))

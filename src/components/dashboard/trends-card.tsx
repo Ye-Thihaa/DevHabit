@@ -15,7 +15,7 @@ import { Card } from "@/components/dashboard/card";
 import { FIELDS, type FieldKey } from "@/lib/fields";
 import { cn } from "@/lib/utils";
 import { api } from "@convex/_generated/api";
-import type { Doc, Id } from "@convex/_generated/dataModel";
+import type { Doc } from "@convex/_generated/dataModel";
 
 const RANGES = [7, 30, 90] as const;
 const COLORS = [
@@ -33,7 +33,7 @@ function daysAgoStr(days: number) {
   return d.toISOString().slice(0, 10);
 }
 
-export function TrendsCard({ userId }: { userId: Id<"users"> }) {
+export function TrendsCard() {
   const [range, setRange] = useState<number>(30);
   const [selected, setSelected] = useState<FieldKey[]>([
     "codingHours",
@@ -43,7 +43,6 @@ export function TrendsCard({ userId }: { userId: Id<"users"> }) {
   ]);
 
   const logs = useQuery(api.dailyLogs.getLogsInRange, {
-    userId,
     startDate: daysAgoStr(range - 1),
     endDate: daysAgoStr(0),
   });
