@@ -4,10 +4,14 @@ import { useQuery } from "convex/react";
 import { Card } from "@/components/dashboard/card";
 import { api } from "@convex/_generated/api";
 
-const SIZE = 112;
-const STROKE = 10;
-const RADIUS = (SIZE - STROKE) / 2;
-const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
+// HH:MM, digital-clock style rather than "1.8h" — matches the JetBrains Mono
+// "stat-num" digits used for every other number on the dashboard.
+function toClockFace(hours: number) {
+  const totalMinutes = Math.round(hours * 60);
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
 
 export function TodayCodingCard() {
   const snapshot = useQuery(api.analytics.getTodaySnapshot);
@@ -24,36 +28,15 @@ export function TodayCodingCard() {
         <p className="text-sm text-muted-foreground">Not enough data yet.</p>
       ) : (
         <div className="flex items-center gap-6">
-          <svg width={SIZE} height={SIZE} className="-rotate-90 shrink-0" aria-hidden>
-            <circle
-              cx={SIZE / 2}
-              cy={SIZE / 2}
-              r={RADIUS}
-              strokeWidth={STROKE}
-              className="fill-none stroke-muted"
-            />
-            <circle
-              cx={SIZE / 2}
-              cy={SIZE / 2}
-              r={RADIUS}
-              strokeWidth={STROKE}
-              strokeLinecap="round"
-              className="fill-none stroke-primary transition-[stroke-dashoffset] duration-700 ease-out"
-              strokeDasharray={CIRCUMFERENCE}
-              strokeDashoffset={
-                CIRCUMFERENCE *
-                (1 -
-                  Math.max(
-                    0,
-                    Math.min(1, (snapshot.codingHours ?? 0) / snapshot.referenceHours),
-                  ))
-              }
-            />
-          </svg>
-          <div>
-            <p className="stat-num text-3xl font-semibold">
-              {snapshot.codingHours === null ? "0h" : `${snapshot.codingHours.toFixed(1)}h`}
+          <div className="rounded-xl border border-border bg-muted/60 px-5 py-4 text-center shadow-[inset_0_2px_6px_rgba(0,0,0,0.25)]">
+            <p className="stat-num text-4xl font-semibold tracking-widest text-primary [text-shadow:0_0_14px_var(--color-primary)]">
+              {toClockFace(snapshot.codingHours ?? 0)}
             </p>
+            <p className="mt-1 text-[10px] font-medium tracking-[0.2em] text-muted-foreground uppercase">
+              hrs&nbsp;:&nbsp;min
+            </p>
+          </div>
+          <div>
             <p className="mt-1 text-sm text-muted-foreground">
               {snapshot.codingHours === null
                 ? "No coding logged yet today"
