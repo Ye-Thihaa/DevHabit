@@ -48,7 +48,10 @@ async function requireUserId(ctx) {
 }
 
 const selfReportedArgs = {
-  codingHours: v.number(),
+  // Optional: once WakaTime is connected the form stops collecting this at
+  // all (see src/routes/log.tsx) and analytics.buildDataset prefers the
+  // measured figure anyway.
+  codingHours: v.optional(v.number()),
   sleepHours: v.number(),
   coffeeIntake: v.number(),
   aiToolUsageMinutes: v.number(),

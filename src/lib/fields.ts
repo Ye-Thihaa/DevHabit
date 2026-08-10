@@ -2,7 +2,7 @@
 // validation and analysis; this one adds display-only detail (short labels for
 // the correlation matrix, form hints, input steps).
 
-export type FieldSource = "self" | "github";
+export type FieldSource = "self" | "github" | "wakatime" | "derived";
 
 export type FieldKey =
   // self-reported
@@ -22,7 +22,11 @@ export type FieldKey =
   | "additions"
   | "deletions"
   | "reposTouched"
-  | "nightCommits";
+  | "nightCommits"
+  // measured from WakaTime
+  | "longestSessionMinutes"
+  // derived from the other layers
+  | "burnoutScore";
 
 export type FieldDef = {
   key: FieldKey;
@@ -131,6 +135,20 @@ export const FIELDS: FieldDef[] = [
   { key: "deletions", label: "Lines Deleted", short: "−Lines", source: "github" },
   { key: "reposTouched", label: "Repos Touched", short: "Repos", source: "github" },
   { key: "nightCommits", label: "Night Commits", short: "Night", source: "github" },
+
+  {
+    key: "longestSessionMinutes",
+    label: "Longest Session",
+    short: "Session",
+    source: "wakatime",
+    unit: "min",
+    min: 0,
+    max: 1440,
+    step: "5",
+    hint: "minutes",
+  },
+
+  { key: "burnoutScore", label: "Burnout Score", short: "Burnout", source: "derived", min: 0, max: 100 },
 ];
 
 export const SELF_FIELDS = FIELDS.filter((f) => f.source === "self");
@@ -148,4 +166,6 @@ export function fieldLabel(key: string): string {
 export const SOURCE_LABEL: Record<FieldSource, string> = {
   self: "self-reported",
   github: "measured",
+  wakatime: "measured",
+  derived: "derived",
 };

@@ -1,7 +1,11 @@
-import { query } from "./_generated/server";
+import { query, action } from "./_generated/server";
+import { ConvexError } from "convex/values";
+import { api } from "./_generated/api";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { mean, shiftDateString } from "./lib/stats.js";
 import { MIN_DAYS_FOR_BURNOUT } from "./lib/thresholds.js";
+
+const ASSESSMENT_MODEL = "claude-opus-5";
 
 // A rule-based burnout risk score, not a trained model — there's no labeled
 // "was this person burned out" outcome anywhere in the dataset to train
@@ -83,10 +87,15 @@ async function buildWindowRows(ctx, userId, startDate, endDate) {
     });
   }
   for (const wt of wakatime) {
-    const row = ensure(wt.date);
-    // WakaTime's measured hours supersede the self-reported figure when
-    // present — it is the more objective source for the same quantity.
-    row.codingHours = wt.codingSeconds / 3600;
+    // WakaTime's measured hours supersede the self-reported figure — but
+    // only when it actually measured something. The summaries endpoint
+    // returns codingSeconds: 0 for every day in range, including days
+    // before the plugin was installed, so a zero can't be told apart from
+    // "wasn't tracked" — treat it as no measurement rather than a confident
+    // zero that would wipe out real self-reported history.
+    if (wt.codingSeconds > 0) {
+      ensure(wt.date).codingHours = wt.codingSeconds / 3600;
+    }
   }
 
   return [...rows.values()];
@@ -135,99 +144,213 @@ function emptyResult(sampleSize, reason) {
   return { score: null, level: null, sampleSize, windowDays: WINDOW_DAYS, components: [], reason };
 }
 
+// The actual calculation, factored out of the query below so
+// convex/burnoutHistory.js's daily snapshot can compute the same score for
+// every user from a mutation context (no signed-in caller to derive userId
+// from there) without duplicating any of this logic.
+export async function computeBurnoutRisk(ctx, userId) {
+  const today = new Date().toISOString().slice(0, 10);
+  const recentStart = shiftDateString(today, -(WINDOW_DAYS - 1));
+  const priorEnd = shiftDateString(recentStart, -1);
+  const priorStart = shiftDateString(priorEnd, -(WINDOW_DAYS - 1));
+
+  const [recentRows, priorRows] = await Promise.all([
+    buildWindowRows(ctx, userId, recentStart, today),
+    buildWindowRows(ctx, userId, priorStart, priorEnd),
+  ]);
+
+  const recent = windowStats(recentRows);
+  const prior = windowStats(priorRows);
+
+  if (recent.loggedDays < MIN_DAYS_FOR_BURNOUT) {
+    return { ...emptyResult(recent.loggedDays, "insufficient-data"), minDays: MIN_DAYS_FOR_BURNOUT };
+  }
+
+  const components = [
+    component(
+      "sleep",
+      "Sleep",
+      recent.sleepHours,
+      prior.sleepHours,
+      SLEEP_DROP_FOR_MAX_RISK,
+      -1,
+      "h/day",
+    ),
+    component(
+      "hoursUp",
+      "Coding hours",
+      recent.codingHours,
+      prior.codingHours,
+      HOURS_UP_FOR_MAX_RISK,
+      1,
+      "h/day",
+    ),
+    component(
+      "outputDown",
+      "Commit output",
+      recent.commits,
+      prior.commits,
+      COMMITS_DOWN_FOR_MAX_RISK,
+      -1,
+      "commits/day",
+    ),
+    component(
+      "nightShare",
+      "Late-night coding share",
+      recent.nightShare,
+      prior.nightShare,
+      NIGHT_SHARE_UP_FOR_MAX_RISK,
+      1,
+      "fraction",
+    ),
+    component(
+      "difficulty",
+      "Task difficulty",
+      recent.taskDifficulty,
+      prior.taskDifficulty,
+      DIFFICULTY_UP_FOR_MAX_RISK,
+      1,
+      "1-5",
+    ),
+    component(
+      "coffee",
+      "Coffee intake",
+      recent.coffeeIntake,
+      prior.coffeeIntake,
+      COFFEE_UP_FOR_MAX_RISK,
+      1,
+      "cups/day",
+    ),
+  ];
+
+  const available = components.filter((c) => c.available);
+  const score =
+    available.length === 0 ? null : Math.round((mean(available.map((c) => c.risk)) ?? 0) * 100);
+
+  const level = score === null ? null : score < 33 ? "low" : score < 66 ? "moderate" : "high";
+
+  return {
+    score,
+    level,
+    sampleSize: recent.loggedDays,
+    windowDays: WINDOW_DAYS,
+    components,
+    reason: null,
+  };
+}
+
 export const getBurnoutRisk = query({
   args: {},
   handler: async (ctx) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) return emptyResult(0, "not-signed-in");
+    return computeBurnoutRisk(ctx, userId);
+  },
+});
 
-    const today = new Date().toISOString().slice(0, 10);
-    const recentStart = shiftDateString(today, -(WINDOW_DAYS - 1));
-    const priorEnd = shiftDateString(recentStart, -1);
-    const priorStart = shiftDateString(priorEnd, -(WINDOW_DAYS - 1));
+// A plain-language narration of the rule-based score above, not a second
+// opinion — the score/level computed by getBurnoutRisk stays the source of
+// truth (it's auditable; an LLM call is not), and Claude is only asked to
+// explain it and suggest what to do next in language a non-technical reader
+// can follow, the same trust model as convex/weeklySummary.js.
+function buildAssessmentPrompt(rule) {
+  const signals = rule.components
+    .filter((c) => c.available)
+    .map(
+      (c) =>
+        `- ${c.label}: ${c.recent?.toFixed?.(2) ?? c.recent} now vs ${c.prior?.toFixed?.(2) ?? c.prior} before (${c.delta > 0 ? "+" : ""}${c.delta?.toFixed?.(2) ?? c.delta} ${c.unit})`,
+    )
+    .join("\n");
 
-    const [recentRows, priorRows] = await Promise.all([
-      buildWindowRows(ctx, userId, recentStart, today),
-      buildWindowRows(ctx, userId, priorStart, priorEnd),
-    ]);
+  return `You are explaining a rule-based burnout risk score to the developer it's about, in plain language a non-technical reader can follow — no jargon like "z-score", "standard deviation", or "regression".
 
-    const recent = windowStats(recentRows);
-    const prior = windowStats(priorRows);
+The score (0-100, already computed, do not recalculate or contradict it) is ${rule.score}, rated "${rule.level}". It compares this developer's last ${rule.windowDays} days to the ${rule.windowDays} days before that, based on ${rule.sampleSize} logged day(s).
 
-    if (recent.loggedDays < MIN_DAYS_FOR_BURNOUT) {
-      return { ...emptyResult(recent.loggedDays, "insufficient-data"), minDays: MIN_DAYS_FOR_BURNOUT };
+Signals that moved (recent vs. prior window):
+${signals || "(none available)"}
+
+Write a JSON object with exactly these keys:
+- "headline": one plain sentence (no numbers) capturing the overall picture.
+- "reasoning": 1-2 sentences pointing to which specific signal(s) above are driving the picture, in everyday language.
+- "suggestions": an array of 1-3 short, practical, non-clinical suggestions (e.g. workload/schedule adjustments). Do not give medical advice or diagnose a condition — this is a heuristic from coding activity, not a health assessment.
+
+If the risk level is "low", keep the tone reassuring and brief rather than manufacturing concern. Respond with ONLY the JSON object, no markdown fences, no other text.`;
+}
+
+function buildMockAssessment(rule) {
+  const base = {
+    headline:
+      rule.level === "low"
+        ? "Things look steady — no signs of strain in your recent activity."
+        : rule.level === "moderate"
+          ? "A few signals are drifting in a burnout-shaped direction."
+          : "Several signals together point toward burnout risk right now.",
+    reasoning: "[Mock assessment — set ANTHROPIC_API_KEY on this deployment for a real one.]",
+    suggestions: [],
+  };
+  return { ...rule, ...base };
+}
+
+function parseAssessmentJson(text) {
+  const cleaned = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "");
+  const parsed = JSON.parse(cleaned);
+  if (typeof parsed.headline !== "string" || typeof parsed.reasoning !== "string") {
+    throw new Error("Missing required fields");
+  }
+  return {
+    headline: parsed.headline,
+    reasoning: parsed.reasoning,
+    suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions.slice(0, 3) : [],
+  };
+}
+
+export const getBurnoutAssessment = action({
+  args: {},
+  handler: async (ctx) => {
+    const rule = await ctx.runQuery(api.burnout.getBurnoutRisk, {});
+    if (rule.score === null) {
+      return { ...rule, headline: null, reasoning: null, suggestions: [] };
     }
 
-    const components = [
-      component(
-        "sleep",
-        "Sleep",
-        recent.sleepHours,
-        prior.sleepHours,
-        SLEEP_DROP_FOR_MAX_RISK,
-        -1,
-        "h/day",
-      ),
-      component(
-        "hoursUp",
-        "Coding hours",
-        recent.codingHours,
-        prior.codingHours,
-        HOURS_UP_FOR_MAX_RISK,
-        1,
-        "h/day",
-      ),
-      component(
-        "outputDown",
-        "Commit output",
-        recent.commits,
-        prior.commits,
-        COMMITS_DOWN_FOR_MAX_RISK,
-        -1,
-        "commits/day",
-      ),
-      component(
-        "nightShare",
-        "Late-night coding share",
-        recent.nightShare,
-        prior.nightShare,
-        NIGHT_SHARE_UP_FOR_MAX_RISK,
-        1,
-        "fraction",
-      ),
-      component(
-        "difficulty",
-        "Task difficulty",
-        recent.taskDifficulty,
-        prior.taskDifficulty,
-        DIFFICULTY_UP_FOR_MAX_RISK,
-        1,
-        "1-5",
-      ),
-      component(
-        "coffee",
-        "Coffee intake",
-        recent.coffeeIntake,
-        prior.coffeeIntake,
-        COFFEE_UP_FOR_MAX_RISK,
-        1,
-        "cups/day",
-      ),
-    ];
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) {
+      return buildMockAssessment(rule);
+    }
 
-    const available = components.filter((c) => c.available);
-    const score =
-      available.length === 0 ? null : Math.round((mean(available.map((c) => c.risk)) ?? 0) * 100);
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: ASSESSMENT_MODEL,
+        max_tokens: 512,
+        output_config: { effort: "low" },
+        messages: [{ role: "user", content: buildAssessmentPrompt(rule) }],
+      }),
+    });
 
-    const level = score === null ? null : score < 33 ? "low" : score < 66 ? "moderate" : "high";
+    if (!response.ok) {
+      const text = await response.text();
+      throw new ConvexError(`Claude API error (${response.status}): ${text.slice(0, 300)}`);
+    }
 
-    return {
-      score,
-      level,
-      sampleSize: recent.loggedDays,
-      windowDays: WINDOW_DAYS,
-      components,
-      reason: null,
-    };
+    const data = await response.json();
+    if (data.stop_reason === "refusal") {
+      throw new ConvexError("Claude declined to assess this data.");
+    }
+
+    const textBlock = data.content.find((block) => block.type === "text");
+    if (!textBlock) {
+      throw new ConvexError("Claude returned no text content.");
+    }
+
+    try {
+      return { ...rule, ...parseAssessmentJson(textBlock.text) };
+    } catch {
+      throw new ConvexError("Claude's response could not be parsed as an assessment.");
+    }
   },
 });

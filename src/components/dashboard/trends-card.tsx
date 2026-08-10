@@ -117,7 +117,7 @@ export function TrendsCard() {
                 aria-hidden
                 className={cn(
                   "size-1.5 rounded-full",
-                  f.source === "github" ? "bg-chart-2" : "bg-chart-5",
+                  f.source !== "self" ? "bg-chart-2" : "bg-chart-5",
                 )}
               />
               {f.label}

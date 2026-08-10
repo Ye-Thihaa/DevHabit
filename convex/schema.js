@@ -46,7 +46,11 @@ export default defineSchema({
   dailyLogs: defineTable({
     userId: v.id("users"),
     date: v.string(), // ISO date, e.g. "2026-08-07"
-    codingHours: v.number(),
+    // Optional because it's a fallback: once WakaTime is connected, the
+    // dashboard stops asking for this (WakaTime's measured figure wins in
+    // analytics.buildDataset — see the comment there), so new rows from a
+    // connected user simply won't carry it.
+    codingHours: v.optional(v.number()),
     sleepHours: v.number(),
     coffeeIntake: v.number(),
     aiToolUsageMinutes: v.number(),
@@ -109,7 +113,29 @@ export default defineSchema({
     date: v.string(),
     codingSeconds: v.number(),
     languages: v.optional(v.array(v.object({ name: v.string(), seconds: v.number() }))),
+    // Longest unbroken coding stretch that day, from WakaTime's Durations API
+    // (heartbeat blocks merged across gaps under 15 minutes). Optional because
+    // it comes from a second, best-effort request per day — a summaries-only
+    // sync (or one where a single day's durations call failed) still has
+    // codingSeconds without this.
+    longestSessionMinutes: v.optional(v.number()),
     fetchedAt: v.number(),
+  })
+    .index("by_user_and_date", ["userId", "date"])
+    .index("by_user", ["userId"]),
+
+  // LAYER 3 — derived. One row per (userId, date), snapshotted daily by a
+  // cron from the same rule-based calculation burnout.getBurnoutRisk runs
+  // live (see convex/burnoutHistory.js) — this table exists purely so the
+  // score has a history to chart and correlate against, not as a second
+  // source of truth for "today's" score.
+  burnoutHistory: defineTable({
+    userId: v.id("users"),
+    date: v.string(),
+    score: v.number(),
+    level: v.union(v.literal("low"), v.literal("moderate"), v.literal("high")),
+    sampleSize: v.number(),
+    ranAt: v.number(),
   })
     .index("by_user_and_date", ["userId", "date"])
     .index("by_user", ["userId"]),

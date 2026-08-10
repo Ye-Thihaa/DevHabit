@@ -2,22 +2,39 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import { useConvexAuth } from "@convex-dev/auth/react";
 import { Loader2 } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, type ReactNode } from "react";
 
 import { AppNav } from "@/components/app-nav";
+import { AlertBanner } from "@/components/dashboard/alert-banner";
 import { BurnoutCard } from "@/components/dashboard/burnout-card";
+import { BurnoutTrendCard } from "@/components/dashboard/burnout-trend-card";
 import { CorrelationsCard } from "@/components/dashboard/correlations-card";
 import { DataQualityCard } from "@/components/dashboard/data-quality-card";
 import { DescriptiveCard } from "@/components/dashboard/descriptive-card";
 import { GithubSyncCard } from "@/components/dashboard/github-sync-card";
 import { LagCard } from "@/components/dashboard/lag-card";
 import { PredictionCard } from "@/components/dashboard/prediction-card";
+import { TodayCodingCard } from "@/components/dashboard/today-coding-card";
 import { TrendsCard } from "@/components/dashboard/trends-card";
 import { WakatimeSyncCard } from "@/components/dashboard/wakatime-sync-card";
 import { WeeklySummaryCard } from "@/components/dashboard/weekly-summary-card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useTimezoneSync } from "@/hooks/use-timezone-sync";
 import type { SummaryStats } from "@/lib/analytics-types";
 import { api } from "@convex/_generated/api";
+
+// Staggers each card's entrance so the tab doesn't just pop in as one flat
+// block — index-based delay keeps it simple without a JS animation library.
+function Reveal({ index, children }: { index: number; children: ReactNode }) {
+  return (
+    <div
+      className="animate-in fade-in slide-in-from-bottom-3 fill-mode-both duration-500"
+      style={{ animationDelay: `${Math.min(index, 6) * 60}ms` }}
+    >
+      {children}
+    </div>
+  );
+}
 
 export const Route = createFileRoute("/dashboard")({
   head: () => ({
@@ -79,23 +96,27 @@ function Dashboard() {
   return (
     <div className="min-h-screen">
       <AppNav />
-      <main className="mx-auto max-w-5xl px-4 py-8 sm:py-12">
+      <main className="mx-auto max-w-6xl px-4 py-8 sm:py-12">
         <h1 className="text-2xl font-semibold sm:text-3xl">Dashboard</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           Commits, pull requests and reviews are measured from the GitHub API. Sleep, coffee, focus
           and self-ratings come from your daily log. The analysis keeps the two apart.
         </p>
 
-        <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {(stats ?? [null, null, null, null]).map((s, i) => (
-            <div
-              key={s ? s.label : i}
-              className="rounded-xl border border-border bg-card p-4 shadow-card"
-            >
-              <p className="text-xs text-muted-foreground">{s ? s.label : "—"}</p>
-              <p className="stat-num mt-1 text-2xl font-semibold">{s ? s.value : "…"}</p>
-            </div>
-          ))}
+        <div className="mt-6 space-y-6">
+          <AlertBanner />
+
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {(stats ?? [null, null, null, null]).map((s, i) => (
+              <div
+                key={s ? s.label : i}
+                className="rounded-xl border border-border bg-card p-4 shadow-card"
+              >
+                <p className="text-xs text-muted-foreground">{s ? s.label : "—"}</p>
+                <p className="stat-num mt-1 text-2xl font-semibold">{s ? s.value : "…"}</p>
+              </div>
+            ))}
+          </div>
         </div>
 
         {summary && summary.seededDays > 0 && (
@@ -104,18 +125,58 @@ function Dashboard() {
           </p>
         )}
 
-        <div className="mt-6 space-y-5">
-          <BurnoutCard />
-          <GithubSyncCard />
-          <WakatimeSyncCard />
-          <DataQualityCard />
-          <DescriptiveCard />
-          <TrendsCard />
-          <CorrelationsCard />
-          <LagCard />
-          <PredictionCard />
-          <WeeklySummaryCard />
-        </div>
+        <Tabs defaultValue="overview" className="mt-6">
+          <TabsList>
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="sync">Sync</TabsTrigger>
+            <TabsTrigger value="analytics">Analytics</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="overview" className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+            <Reveal index={0}>
+              <TodayCodingCard />
+            </Reveal>
+            <Reveal index={1}>
+              <BurnoutCard />
+            </Reveal>
+            <Reveal index={2}>
+              <BurnoutTrendCard />
+            </Reveal>
+            <Reveal index={3}>
+              <WeeklySummaryCard />
+            </Reveal>
+          </TabsContent>
+
+          <TabsContent value="sync" className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+            <Reveal index={0}>
+              <GithubSyncCard />
+            </Reveal>
+            <Reveal index={1}>
+              <WakatimeSyncCard />
+            </Reveal>
+          </TabsContent>
+
+          <TabsContent value="analytics" className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+            <Reveal index={0}>
+              <DataQualityCard />
+            </Reveal>
+            <Reveal index={1}>
+              <DescriptiveCard />
+            </Reveal>
+            <Reveal index={2}>
+              <TrendsCard />
+            </Reveal>
+            <Reveal index={3}>
+              <CorrelationsCard />
+            </Reveal>
+            <Reveal index={4}>
+              <LagCard />
+            </Reveal>
+            <Reveal index={5}>
+              <PredictionCard />
+            </Reveal>
+          </TabsContent>
+        </Tabs>
       </main>
     </div>
   );

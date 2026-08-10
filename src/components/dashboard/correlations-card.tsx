@@ -3,12 +3,34 @@ import { useState } from "react";
 import { useQuery } from "convex/react";
 
 import { Card } from "@/components/dashboard/card";
+import { TechnicalDetails } from "@/components/dashboard/technical-details";
 import type { CorrelationCell, CorrelationMatrix } from "@/lib/analytics-types";
 import { FIELD_BY_KEY } from "@/lib/fields";
 import { cn } from "@/lib/utils";
 import { api } from "@convex/_generated/api";
 
 type Cell = CorrelationCell;
+
+// The single strongest significant link, described in plain language, so a
+// reader doesn't have to parse a matrix of r/p values to get the headline.
+function findStrongestLink(result: CorrelationMatrix) {
+  let best: { rowKey: string; colKey: string; cell: Cell } | null = null;
+  for (const row of result.fields) {
+    for (const col of result.fields) {
+      if (row.key >= col.key) continue; // skip diagonal + duplicate mirror
+      const cell = result.matrix[row.key]?.[col.key] as Cell | undefined;
+      if (!cell || cell.r === null || !cell.significant) continue;
+      if (!best || Math.abs(cell.r) > Math.abs(best.cell.r as number)) {
+        best = { rowKey: row.key, colKey: col.key, cell };
+      }
+    }
+  }
+  if (!best) return null;
+  const rowLabel = FIELD_BY_KEY[best.rowKey]?.label ?? best.rowKey;
+  const colLabel = FIELD_BY_KEY[best.colKey]?.label ?? best.colKey;
+  const direction = (best.cell.r as number) >= 0 ? "go up together" : "move in opposite directions";
+  return `Strongest pattern found: ${rowLabel} and ${colLabel} tend to ${direction}.`;
+}
 
 function cellStyle(cell: Cell) {
   if (cell.r === null) return { backgroundColor: "var(--color-muted)" };
@@ -34,14 +56,19 @@ export function CorrelationsCard() {
 
   return (
     <Card
-      title="Correlations"
-      description="Pearson r across every field, with the sample size and significance behind it."
+      title="What goes together"
+      description="Which habits tend to rise and fall together."
       icon={Grid3x3}
     >
       {result === undefined ? (
         <p className="text-sm text-muted-foreground">Loading…</p>
       ) : (
         <>
+          <p className="mb-4 text-sm">
+            {findStrongestLink(result) ??
+              "No clear pattern yet — log more days and one may show up here."}
+          </p>
+
           <label className="mb-4 flex w-fit cursor-pointer items-center gap-2 text-xs text-muted-foreground">
             <input
               type="checkbox"
@@ -76,7 +103,7 @@ export function CorrelationsCard() {
                           aria-hidden
                           className={cn(
                             "size-1.5 rounded-full",
-                            row.source === "github" ? "bg-chart-2" : "bg-chart-5",
+                            row.source !== "self" ? "bg-chart-2" : "bg-chart-5",
                           )}
                         />
                         {row.label}
@@ -112,38 +139,45 @@ export function CorrelationsCard() {
             </table>
           </div>
 
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-2 font-mono text-xs text-muted-foreground">
-              <span>−1.0</span>
-              <span
-                className="h-2 w-28 rounded-full"
-                style={{
-                  background:
-                    "linear-gradient(to right, var(--color-chart-4), var(--color-card), var(--color-chart-2))",
-                }}
-              />
-              <span>+1.0</span>
-            </div>
-            <p className="font-mono text-xs text-muted-foreground">
-              {result.totalDays} days in range · * = p &lt; 0.05
-            </p>
-          </div>
+          <p className="mt-3 text-xs text-muted-foreground">
+            Darker squares (blue or red) mean a stronger link. Hover any square for the exact
+            numbers. Washed-out squares aren't reliable yet — there isn't enough data behind them.
+          </p>
 
-          <div className="mt-4 space-y-2 rounded-lg border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
-            <p>
-              Cells are dimmed when the relationship isn't statistically significant, and blank when
-              fewer than {result.minPairs} days overlap on both fields. Hover any cell for its exact
-              r, n and p.
-            </p>
-            <p>
-              This is a matrix of {result.fields.length}×{result.fields.length} tests, so a handful
-              of stars are expected by chance alone. Treat a starred cell as a hypothesis worth
-              testing on new data, not a result — and note that a correlation between two
-              self-reported fields (
-              <span className="inline-block size-1.5 rounded-full bg-chart-5 align-middle" />) can
-              be produced by how you remember a day rather than by what happened in it.
-            </p>
-          </div>
+          <TechnicalDetails>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2 font-mono text-xs text-muted-foreground">
+                <span>−1.0</span>
+                <span
+                  className="h-2 w-28 rounded-full"
+                  style={{
+                    background:
+                      "linear-gradient(to right, var(--color-chart-4), var(--color-card), var(--color-chart-2))",
+                  }}
+                />
+                <span>+1.0</span>
+              </div>
+              <p className="font-mono text-xs text-muted-foreground">
+                {result.totalDays} days in range · * = p &lt; 0.05
+              </p>
+            </div>
+
+            <div className="mt-3 space-y-2 rounded-lg border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
+              <p>
+                Cells are dimmed when the relationship isn't statistically significant, and blank
+                when fewer than {result.minPairs} days overlap on both fields. Hover any cell for
+                its exact r, n and p.
+              </p>
+              <p>
+                This is a matrix of {result.fields.length}×{result.fields.length} tests, so a
+                handful of stars are expected by chance alone. Treat a starred cell as a hypothesis
+                worth testing on new data, not a result — and note that a correlation between two
+                self-reported fields (
+                <span className="inline-block size-1.5 rounded-full bg-chart-5 align-middle" />)
+                can be produced by how you remember a day rather than by what happened in it.
+              </p>
+            </div>
+          </TechnicalDetails>
         </>
       )}
     </Card>

@@ -93,6 +93,26 @@ export const FIELD_DEFS = [
   { key: "deletions", label: "Lines Deleted", source: "github", min: 0, plausibleMax: 5000 },
   { key: "reposTouched", label: "Repos Touched", source: "github", min: 0, plausibleMax: 8 },
   { key: "nightCommits", label: "Night Commits", source: "github", min: 0, plausibleMax: 30 },
+
+  // --- measured from WakaTime ---------------------------------------------
+  {
+    key: "longestSessionMinutes",
+    label: "Longest Session",
+    source: "wakatime",
+    unit: "min",
+    min: 0,
+    plausibleMax: 300,
+  },
+
+  // --- derived from the other layers, not typed in or fetched directly ---
+  {
+    key: "burnoutScore",
+    label: "Burnout Score",
+    source: "derived",
+    min: 0,
+    max: 100,
+    plausibleMax: 100,
+  },
 ];
 
 export const SELF_FIELDS = FIELD_DEFS.filter((f) => f.source === "self").map((f) => f.key);

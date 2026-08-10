@@ -60,6 +60,13 @@ export function AppNav() {
             >
               Dashboard
             </Link>
+            <Link
+              to="/settings"
+              className={linkClass}
+              activeProps={{ className: "bg-accent text-foreground" }}
+            >
+              Settings
+            </Link>
           </nav>
         </div>
 

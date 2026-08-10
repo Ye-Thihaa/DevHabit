@@ -44,6 +44,17 @@ export const setWakatimeApiKey = mutation({
   },
 });
 
+export const clearWakatimeApiKey = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new ConvexError("Not signed in");
+    }
+    await ctx.db.patch(userId, { wakatimeApiKey: undefined });
+  },
+});
+
 // Records the browser's UTC offset so commit timestamps can be bucketed by the
 // developer's own clock rather than UTC. Called automatically on the dashboard;
 // see the note on users.timezoneOffsetMinutes in schema.js for the sign

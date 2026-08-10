@@ -1,8 +1,17 @@
-import { Flame } from "lucide-react";
-import { useQuery } from "convex/react";
+import { Flame, Loader2, Sparkles } from "lucide-react";
+import { useState } from "react";
+import { useAction, useQuery } from "convex/react";
+import { ConvexError } from "convex/values";
 
 import { Card } from "@/components/dashboard/card";
+import { Button } from "@/components/ui/button";
 import { api } from "@convex/_generated/api";
+
+type Assessment = {
+  headline: string | null;
+  reasoning: string | null;
+  suggestions: string[];
+};
 
 const LEVEL_STYLE = {
   low: "text-success",
@@ -23,6 +32,24 @@ function formatDelta(delta: number, unit: string) {
 
 export function BurnoutCard() {
   const risk = useQuery(api.burnout.getBurnoutRisk);
+  const getAssessment = useAction(api.burnout.getBurnoutAssessment);
+
+  const [assessment, setAssessment] = useState<Assessment | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleAssess = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await getAssessment();
+      setAssessment(result);
+    } catch (err) {
+      setError(err instanceof ConvexError ? (err.data as string) : "Failed to get AI assessment.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <Card
@@ -63,6 +90,35 @@ export function BurnoutCard() {
                 </li>
               ))}
           </ul>
+
+          <div className="border-t border-border pt-4">
+            <Button variant="outline" size="sm" disabled={loading} onClick={handleAssess}>
+              {loading ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Sparkles className="size-4" />
+              )}
+              {loading ? "Asking…" : "Explain this in plain language"}
+            </Button>
+
+            {error && <p className="mt-3 font-mono text-xs text-destructive">{error}</p>}
+
+            {assessment && (
+              <div className="mt-3 rounded-xl border border-border bg-muted/40 p-4">
+                {assessment.headline && <p className="text-sm font-medium">{assessment.headline}</p>}
+                {assessment.reasoning && (
+                  <p className="mt-1 text-sm text-muted-foreground">{assessment.reasoning}</p>
+                )}
+                {assessment.suggestions.length > 0 && (
+                  <ul className="mt-3 list-disc space-y-1 pl-4 text-sm text-muted-foreground">
+                    {assessment.suggestions.map((s, i) => (
+                      <li key={i}>{s}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </Card>
