@@ -144,100 +144,107 @@ function emptyResult(sampleSize, reason) {
   return { score: null, level: null, sampleSize, windowDays: WINDOW_DAYS, components: [], reason };
 }
 
+// The actual calculation, factored out of the query below so
+// convex/burnoutHistory.js's daily snapshot can compute the same score for
+// every user from a mutation context (no signed-in caller to derive userId
+// from there) without duplicating any of this logic.
+export async function computeBurnoutRisk(ctx, userId) {
+  const today = new Date().toISOString().slice(0, 10);
+  const recentStart = shiftDateString(today, -(WINDOW_DAYS - 1));
+  const priorEnd = shiftDateString(recentStart, -1);
+  const priorStart = shiftDateString(priorEnd, -(WINDOW_DAYS - 1));
+
+  const [recentRows, priorRows] = await Promise.all([
+    buildWindowRows(ctx, userId, recentStart, today),
+    buildWindowRows(ctx, userId, priorStart, priorEnd),
+  ]);
+
+  const recent = windowStats(recentRows);
+  const prior = windowStats(priorRows);
+
+  if (recent.loggedDays < MIN_DAYS_FOR_BURNOUT) {
+    return { ...emptyResult(recent.loggedDays, "insufficient-data"), minDays: MIN_DAYS_FOR_BURNOUT };
+  }
+
+  const components = [
+    component(
+      "sleep",
+      "Sleep",
+      recent.sleepHours,
+      prior.sleepHours,
+      SLEEP_DROP_FOR_MAX_RISK,
+      -1,
+      "h/day",
+    ),
+    component(
+      "hoursUp",
+      "Coding hours",
+      recent.codingHours,
+      prior.codingHours,
+      HOURS_UP_FOR_MAX_RISK,
+      1,
+      "h/day",
+    ),
+    component(
+      "outputDown",
+      "Commit output",
+      recent.commits,
+      prior.commits,
+      COMMITS_DOWN_FOR_MAX_RISK,
+      -1,
+      "commits/day",
+    ),
+    component(
+      "nightShare",
+      "Late-night coding share",
+      recent.nightShare,
+      prior.nightShare,
+      NIGHT_SHARE_UP_FOR_MAX_RISK,
+      1,
+      "fraction",
+    ),
+    component(
+      "difficulty",
+      "Task difficulty",
+      recent.taskDifficulty,
+      prior.taskDifficulty,
+      DIFFICULTY_UP_FOR_MAX_RISK,
+      1,
+      "1-5",
+    ),
+    component(
+      "coffee",
+      "Coffee intake",
+      recent.coffeeIntake,
+      prior.coffeeIntake,
+      COFFEE_UP_FOR_MAX_RISK,
+      1,
+      "cups/day",
+    ),
+  ];
+
+  const available = components.filter((c) => c.available);
+  const score =
+    available.length === 0 ? null : Math.round((mean(available.map((c) => c.risk)) ?? 0) * 100);
+
+  const level = score === null ? null : score < 33 ? "low" : score < 66 ? "moderate" : "high";
+
+  return {
+    score,
+    level,
+    sampleSize: recent.loggedDays,
+    windowDays: WINDOW_DAYS,
+    components,
+    reason: null,
+  };
+}
+
 export const getBurnoutRisk = query({
   args: {},
   handler: async (ctx) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) return emptyResult(0, "not-signed-in");
-
-    const today = new Date().toISOString().slice(0, 10);
-    const recentStart = shiftDateString(today, -(WINDOW_DAYS - 1));
-    const priorEnd = shiftDateString(recentStart, -1);
-    const priorStart = shiftDateString(priorEnd, -(WINDOW_DAYS - 1));
-
-    const [recentRows, priorRows] = await Promise.all([
-      buildWindowRows(ctx, userId, recentStart, today),
-      buildWindowRows(ctx, userId, priorStart, priorEnd),
-    ]);
-
-    const recent = windowStats(recentRows);
-    const prior = windowStats(priorRows);
-
-    if (recent.loggedDays < MIN_DAYS_FOR_BURNOUT) {
-      return { ...emptyResult(recent.loggedDays, "insufficient-data"), minDays: MIN_DAYS_FOR_BURNOUT };
-    }
-
-    const components = [
-      component(
-        "sleep",
-        "Sleep",
-        recent.sleepHours,
-        prior.sleepHours,
-        SLEEP_DROP_FOR_MAX_RISK,
-        -1,
-        "h/day",
-      ),
-      component(
-        "hoursUp",
-        "Coding hours",
-        recent.codingHours,
-        prior.codingHours,
-        HOURS_UP_FOR_MAX_RISK,
-        1,
-        "h/day",
-      ),
-      component(
-        "outputDown",
-        "Commit output",
-        recent.commits,
-        prior.commits,
-        COMMITS_DOWN_FOR_MAX_RISK,
-        -1,
-        "commits/day",
-      ),
-      component(
-        "nightShare",
-        "Late-night coding share",
-        recent.nightShare,
-        prior.nightShare,
-        NIGHT_SHARE_UP_FOR_MAX_RISK,
-        1,
-        "fraction",
-      ),
-      component(
-        "difficulty",
-        "Task difficulty",
-        recent.taskDifficulty,
-        prior.taskDifficulty,
-        DIFFICULTY_UP_FOR_MAX_RISK,
-        1,
-        "1-5",
-      ),
-      component(
-        "coffee",
-        "Coffee intake",
-        recent.coffeeIntake,
-        prior.coffeeIntake,
-        COFFEE_UP_FOR_MAX_RISK,
-        1,
-        "cups/day",
-      ),
-    ];
-
-    const available = components.filter((c) => c.available);
-    const score =
-      available.length === 0 ? null : Math.round((mean(available.map((c) => c.risk)) ?? 0) * 100);
-
-    const level = score === null ? null : score < 33 ? "low" : score < 66 ? "moderate" : "high";
-
-    return {
-      score,
-      level,
-      sampleSize: recent.loggedDays,
-      windowDays: WINDOW_DAYS,
-      components,
-      reason: null,
-    };
+    return computeBurnoutRisk(ctx, userId);
   },
 });
 

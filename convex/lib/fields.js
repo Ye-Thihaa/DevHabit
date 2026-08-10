@@ -103,6 +103,16 @@ export const FIELD_DEFS = [
     min: 0,
     plausibleMax: 300,
   },
+
+  // --- derived from the other layers, not typed in or fetched directly ---
+  {
+    key: "burnoutScore",
+    label: "Burnout Score",
+    source: "derived",
+    min: 0,
+    max: 100,
+    plausibleMax: 100,
+  },
 ];
 
 export const SELF_FIELDS = FIELD_DEFS.filter((f) => f.source === "self").map((f) => f.key);

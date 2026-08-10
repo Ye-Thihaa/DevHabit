@@ -2,6 +2,7 @@ import { Timer, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { ConvexError } from "convex/values";
+import { Link } from "@tanstack/react-router";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -72,6 +73,9 @@ export function WakatimeSyncCard() {
         <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/50 px-3 py-2 text-sm">
             <span className="text-muted-foreground">WakaTime key saved.</span>
+            <Link to="/settings" className="ml-auto text-xs underline text-muted-foreground">
+              Replace or remove key
+            </Link>
           </div>
           <Button disabled={busy} onClick={handleSync}>
             {busy && <Loader2 className="size-4 animate-spin" />}

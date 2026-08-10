@@ -5,7 +5,9 @@ import { Loader2 } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
 
 import { AppNav } from "@/components/app-nav";
+import { AlertBanner } from "@/components/dashboard/alert-banner";
 import { BurnoutCard } from "@/components/dashboard/burnout-card";
+import { BurnoutTrendCard } from "@/components/dashboard/burnout-trend-card";
 import { CorrelationsCard } from "@/components/dashboard/correlations-card";
 import { DataQualityCard } from "@/components/dashboard/data-quality-card";
 import { DescriptiveCard } from "@/components/dashboard/descriptive-card";
@@ -101,16 +103,20 @@ function Dashboard() {
           and self-ratings come from your daily log. The analysis keeps the two apart.
         </p>
 
-        <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {(stats ?? [null, null, null, null]).map((s, i) => (
-            <div
-              key={s ? s.label : i}
-              className="rounded-xl border border-border bg-card p-4 shadow-card"
-            >
-              <p className="text-xs text-muted-foreground">{s ? s.label : "—"}</p>
-              <p className="stat-num mt-1 text-2xl font-semibold">{s ? s.value : "…"}</p>
-            </div>
-          ))}
+        <div className="mt-6 space-y-6">
+          <AlertBanner />
+
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {(stats ?? [null, null, null, null]).map((s, i) => (
+              <div
+                key={s ? s.label : i}
+                className="rounded-xl border border-border bg-card p-4 shadow-card"
+              >
+                <p className="text-xs text-muted-foreground">{s ? s.label : "—"}</p>
+                <p className="stat-num mt-1 text-2xl font-semibold">{s ? s.value : "…"}</p>
+              </div>
+            ))}
+          </div>
         </div>
 
         {summary && summary.seededDays > 0 && (
@@ -134,6 +140,9 @@ function Dashboard() {
               <BurnoutCard />
             </Reveal>
             <Reveal index={2}>
+              <BurnoutTrendCard />
+            </Reveal>
+            <Reveal index={3}>
               <WeeklySummaryCard />
             </Reveal>
           </TabsContent>

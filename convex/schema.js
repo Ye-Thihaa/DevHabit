@@ -124,6 +124,22 @@ export default defineSchema({
     .index("by_user_and_date", ["userId", "date"])
     .index("by_user", ["userId"]),
 
+  // LAYER 3 — derived. One row per (userId, date), snapshotted daily by a
+  // cron from the same rule-based calculation burnout.getBurnoutRisk runs
+  // live (see convex/burnoutHistory.js) — this table exists purely so the
+  // score has a history to chart and correlate against, not as a second
+  // source of truth for "today's" score.
+  burnoutHistory: defineTable({
+    userId: v.id("users"),
+    date: v.string(),
+    score: v.number(),
+    level: v.union(v.literal("low"), v.literal("moderate"), v.literal("high")),
+    sampleSize: v.number(),
+    ranAt: v.number(),
+  })
+    .index("by_user_and_date", ["userId", "date"])
+    .index("by_user", ["userId"]),
+
   // LAYER 2 — ingestion audit. Every backfill/sync appends one row, including
   // failures, so the dataset's coverage is explainable after the fact.
   syncRuns: defineTable({

@@ -50,11 +50,19 @@ async function buildDataset(ctx, userId, startDate, endDate, { includeSeeded = t
         ? q.eq("userId", userId).gte("date", startDate).lte("date", endDate)
         : q.eq("userId", userId),
     );
+  const burnoutQuery = ctx.db
+    .query("burnoutHistory")
+    .withIndex("by_user_and_date", (q) =>
+      startDate && endDate
+        ? q.eq("userId", userId).gte("date", startDate).lte("date", endDate)
+        : q.eq("userId", userId),
+    );
 
-  const [logs, github, wakatime] = await Promise.all([
+  const [logs, github, wakatime, burnout] = await Promise.all([
     logsQuery.collect(),
     githubQuery.collect(),
     wakatimeQuery.collect(),
+    burnoutQuery.collect(),
   ]);
 
   const usableLogs = includeSeeded ? logs : logs.filter((l) => l.isSeeded !== true);
@@ -62,13 +70,20 @@ async function buildDataset(ctx, userId, startDate, endDate, { includeSeeded = t
   const logByDate = new Map(usableLogs.map((l) => [l.date, l]));
   const ghByDate = new Map(github.map((g) => [g.date, g]));
   const wtByDate = new Map(wakatime.map((w) => [w.date, w]));
+  const bhByDate = new Map(burnout.map((b) => [b.date, b]));
 
+  // burnoutHistory isn't part of the union that defines which dates get a
+  // row — it only ever has a row for a date that already has other data
+  // (the snapshot requires MIN_DAYS_FOR_BURNOUT recent logged days to exist
+  // at all), so it just rides along on dates the other sources already
+  // produced.
   const dates = [...new Set([...logByDate.keys(), ...ghByDate.keys(), ...wtByDate.keys()])].sort();
 
   return dates.map((date) => {
     const log = logByDate.get(date);
     const gh = ghByDate.get(date);
     const wt = wtByDate.get(date);
+    const bh = bhByDate.get(date);
     const row = { date };
 
     for (const key of SELF_FIELDS) {
@@ -91,6 +106,7 @@ async function buildDataset(ctx, userId, startDate, endDate, { includeSeeded = t
     row.nightCommits = gh?.commitsByBucket?.night ?? null;
     row.commitsByBucket = gh?.commitsByBucket ?? null;
     row.longestSessionMinutes = wt?.longestSessionMinutes ?? null;
+    row.burnoutScore = bh?.score ?? null;
 
     // WakaTime's measured hours supersede the self-reported figure — it's
     // the more objective source for the same quantity, and the daily-log
