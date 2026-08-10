@@ -11,6 +11,7 @@
 import type * as analytics from "../analytics.js";
 import type * as auth from "../auth.js";
 import type * as burnout from "../burnout.js";
+import type * as crons from "../crons.js";
 import type * as dailyLogs from "../dailyLogs.js";
 import type * as github from "../github.js";
 import type * as http from "../http.js";
@@ -36,6 +37,7 @@ declare const fullApi: ApiFromModules<{
   analytics: typeof analytics;
   auth: typeof auth;
   burnout: typeof burnout;
+  crons: typeof crons;
   dailyLogs: typeof dailyLogs;
   github: typeof github;
   http: typeof http;

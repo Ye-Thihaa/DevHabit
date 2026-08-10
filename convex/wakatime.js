@@ -1,4 +1,4 @@
-import { action, internalMutation } from "./_generated/server";
+import { action, internalAction, internalMutation, internalQuery } from "./_generated/server";
 import { v, ConvexError } from "convex/values";
 import { api, internal } from "./_generated/api";
 import { getAuthUserId } from "@convex-dev/auth/server";
@@ -87,6 +87,82 @@ async function resolveUser(ctx) {
   return { userId, apiKey: user.wakatimeApiKey };
 }
 
+// Shared by the user-triggered action below and the cron-triggered bulk sync
+// in syncAllConnectedUsers, so "click the button" and "runs automatically"
+// are exactly the same code path.
+async function performSync(ctx, userId, apiKey, days) {
+  const span = Math.min(Math.max(Math.floor(days), 1), MAX_WAKATIME_SYNC_DAYS);
+  const endDate = new Date().toISOString().slice(0, 10);
+  const startDate = new Date(Date.now() - (span - 1) * 86_400_000).toISOString().slice(0, 10);
+
+  const url = `${WAKATIME_SUMMARIES_URL}?start=${startDate}&end=${endDate}`;
+  let payload;
+  try {
+    const response = await fetch(url, { headers: authHeaders(apiKey) });
+    if (!response.ok) {
+      const text = await response.text();
+      throw new ConvexError(`WakaTime API error (${response.status}): ${text.slice(0, 300)}`);
+    }
+    const contentType = response.headers.get("content-type") ?? "";
+    if (!contentType.includes("application/json")) {
+      const text = await response.text();
+      throw new ConvexError(
+        `WakaTime returned a non-JSON response (content-type: ${contentType || "unknown"}): ${text.slice(0, 300)}`,
+      );
+    }
+    payload = await response.json();
+  } catch (err) {
+    const message =
+      err instanceof ConvexError
+        ? String(err.data)
+        : `${err instanceof Error ? err.name : "Error"}: ${err instanceof Error ? err.message : String(err)}`;
+    await ctx.runMutation(internal.wakatime.recordSyncRun, {
+      userId,
+      kind: "wakatime",
+      startDate,
+      endDate,
+      daysWritten: 0,
+      status: "error",
+      message,
+    });
+    throw err instanceof ConvexError ? err : new ConvexError(message);
+  }
+
+  const rows = (payload.data ?? []).map((day) => ({
+    date: day.range?.date ?? day.range?.start?.slice(0, 10),
+    codingSeconds: Math.round(day.grand_total?.total_seconds ?? 0),
+    languages: (day.languages ?? [])
+      .filter((l) => l.total_seconds > 0)
+      .map((l) => ({ name: l.name, seconds: Math.round(l.total_seconds) })),
+  })).filter((row) => row.date);
+
+  // One extra request per day to find the longest unbroken sitting that
+  // day — the summaries endpoint only gives the daily total, not how it was
+  // distributed across the day.
+  const durationsByRow = await Promise.all(rows.map((row) => fetchDurationBlocks(apiKey, row.date)));
+  rows.forEach((row, i) => {
+    row.longestSessionMinutes = longestSessionMinutes(durationsByRow[i]) ?? undefined;
+  });
+
+  const written = await ctx.runMutation(internal.wakatime.writeWakatimeDays, { userId, rows });
+
+  await ctx.runMutation(internal.wakatime.recordSyncRun, {
+    userId,
+    kind: "wakatime",
+    startDate,
+    endDate,
+    daysWritten: written,
+    status: "ok",
+  });
+
+  return {
+    startDate,
+    endDate,
+    daysWritten: written,
+    totalCodingHours: rows.reduce((sum, r) => sum + r.codingSeconds, 0) / 3600,
+  };
+}
+
 export const syncRecent = action({
   args: {
     // How far back to pull, ending today.
@@ -94,79 +170,42 @@ export const syncRecent = action({
   },
   handler: async (ctx, { days = 30 }) => {
     const { userId, apiKey } = await resolveUser(ctx);
+    return performSync(ctx, userId, apiKey, days);
+  },
+});
 
-    const span = Math.min(Math.max(Math.floor(days), 1), MAX_WAKATIME_SYNC_DAYS);
-    const endDate = new Date().toISOString().slice(0, 10);
-    const startDate = new Date(Date.now() - (span - 1) * 86_400_000).toISOString().slice(0, 10);
+// Keeps the "Today" ring (and anything else reading recent WakaTime data)
+// current without the user having to remember to click Sync. Only pulls the
+// last 2 days — today plus yesterday, to catch a session that rolled past
+// midnight — since this runs unattended and often, unlike the user-triggered
+// full 30-day sync.
+const AUTO_SYNC_LOOKBACK_DAYS = 2;
 
-    const url = `${WAKATIME_SUMMARIES_URL}?start=${startDate}&end=${endDate}`;
-    let payload;
-    try {
-      const response = await fetch(url, { headers: authHeaders(apiKey) });
-      if (!response.ok) {
-        const text = await response.text();
-        throw new ConvexError(`WakaTime API error (${response.status}): ${text.slice(0, 300)}`);
+export const listConnectedUserIds = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    // Scans the whole users table — fine at this scale; would need an index
+    // on wakatimeApiKey presence if the user count grows large enough for
+    // this cron to matter.
+    const users = await ctx.db.query("users").collect();
+    return users
+      .filter((u) => Boolean(u.wakatimeApiKey))
+      .map((u) => ({ userId: u._id, apiKey: u.wakatimeApiKey }));
+  },
+});
+
+export const syncAllConnectedUsers = internalAction({
+  args: {},
+  handler: async (ctx) => {
+    const connected = await ctx.runQuery(internal.wakatime.listConnectedUserIds, {});
+    for (const { userId, apiKey } of connected) {
+      try {
+        await performSync(ctx, userId, apiKey, AUTO_SYNC_LOOKBACK_DAYS);
+      } catch {
+        // performSync already recorded the failed run in syncRuns; one
+        // user's bad key/outage shouldn't stop the rest of the batch.
       }
-      const contentType = response.headers.get("content-type") ?? "";
-      if (!contentType.includes("application/json")) {
-        const text = await response.text();
-        throw new ConvexError(
-          `WakaTime returned a non-JSON response (content-type: ${contentType || "unknown"}): ${text.slice(0, 300)}`,
-        );
-      }
-      payload = await response.json();
-    } catch (err) {
-      const message =
-        err instanceof ConvexError
-          ? String(err.data)
-          : `${err instanceof Error ? err.name : "Error"}: ${err instanceof Error ? err.message : String(err)}`;
-      await ctx.runMutation(internal.wakatime.recordSyncRun, {
-        userId,
-        kind: "wakatime",
-        startDate,
-        endDate,
-        daysWritten: 0,
-        status: "error",
-        message,
-      });
-      throw err instanceof ConvexError ? err : new ConvexError(message);
     }
-
-    const rows = (payload.data ?? []).map((day) => ({
-      date: day.range?.date ?? day.range?.start?.slice(0, 10),
-      codingSeconds: Math.round(day.grand_total?.total_seconds ?? 0),
-      languages: (day.languages ?? [])
-        .filter((l) => l.total_seconds > 0)
-        .map((l) => ({ name: l.name, seconds: Math.round(l.total_seconds) })),
-    })).filter((row) => row.date);
-
-    // One extra request per day to find the longest unbroken sitting that
-    // day — the summaries endpoint only gives the daily total, not how it was
-    // distributed across the day.
-    const durationsByRow = await Promise.all(
-      rows.map((row) => fetchDurationBlocks(apiKey, row.date)),
-    );
-    rows.forEach((row, i) => {
-      row.longestSessionMinutes = longestSessionMinutes(durationsByRow[i]) ?? undefined;
-    });
-
-    const written = await ctx.runMutation(internal.wakatime.writeWakatimeDays, { userId, rows });
-
-    await ctx.runMutation(internal.wakatime.recordSyncRun, {
-      userId,
-      kind: "wakatime",
-      startDate,
-      endDate,
-      daysWritten: written,
-      status: "ok",
-    });
-
-    return {
-      startDate,
-      endDate,
-      daysWritten: written,
-      totalCodingHours: rows.reduce((sum, r) => sum + r.codingSeconds, 0) / 3600,
-    };
   },
 });
 

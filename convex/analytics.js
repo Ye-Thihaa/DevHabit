@@ -92,6 +92,19 @@ async function buildDataset(ctx, userId, startDate, endDate, { includeSeeded = t
     row.commitsByBucket = gh?.commitsByBucket ?? null;
     row.longestSessionMinutes = wt?.longestSessionMinutes ?? null;
 
+    // WakaTime's measured hours supersede the self-reported figure — it's
+    // the more objective source for the same quantity, and the daily-log
+    // form stops collecting it at all once a user connects WakaTime. But
+    // WakaTime's summaries endpoint returns codingSeconds: 0 for every day
+    // in the requested range, including days before the plugin was even
+    // installed — it cannot distinguish "genuinely didn't code" from "wasn't
+    // tracked yet". So a zero is treated as "no measurement" and falls back
+    // to self-reported, rather than confidently zeroing out real history.
+    row.codingHoursSource = wt && wt.codingSeconds > 0 ? "wakatime" : log ? "self" : null;
+    if (row.codingHoursSource === "wakatime") {
+      row.codingHours = wt.codingSeconds / 3600;
+    }
+
     row.hasSelfReported = Boolean(log);
     row.hasGithub = Boolean(gh);
     row.hasWakatime = Boolean(wt);
@@ -105,6 +118,56 @@ async function buildDataset(ctx, userId, startDate, endDate, { includeSeeded = t
 function columnOf(rows, key) {
   return rows.map((r) => (typeof r[key] === "number" ? r[key] : NaN));
 }
+
+// --- today ----------------------------------------------------------------
+
+// Powers the "Today" ring on the dashboard. Deliberately excludes seed data —
+// this widget's whole point is to show a brand-new user their real current
+// state, and seed rows would paper over exactly the "I have no history yet"
+// moment it exists to handle.
+//
+// The reference/target hours is the user's own trailing 30-day average once
+// there's enough of one to be meaningful (5+ days); before that, a flat 4h
+// is used as a neutral, non-personalized reference so the ring still means
+// something on day one rather than being empty or arbitrary.
+const REFERENCE_WINDOW_DAYS = 30;
+const MIN_DAYS_FOR_PERSONAL_REFERENCE = 5;
+const DEFAULT_REFERENCE_HOURS = 4;
+
+export const getTodaySnapshot = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await requireUserId(ctx);
+    if (!userId) return null;
+
+    const today = new Date().toISOString().slice(0, 10);
+    const referenceStart = shiftDateString(today, -REFERENCE_WINDOW_DAYS);
+    const referenceEnd = shiftDateString(today, -1);
+
+    const [todayRows, referenceRows] = await Promise.all([
+      buildDataset(ctx, userId, today, today, { includeSeeded: false }),
+      buildDataset(ctx, userId, referenceStart, referenceEnd, { includeSeeded: false }),
+    ]);
+
+    const todayRow = todayRows[0] ?? null;
+    const codingHours = typeof todayRow?.codingHours === "number" ? todayRow.codingHours : null;
+    const source = todayRow?.codingHoursSource ?? null;
+
+    const referenceValues = referenceRows
+      .map((r) => r.codingHours)
+      .filter((v) => typeof v === "number");
+    const personalAverage =
+      referenceValues.length >= MIN_DAYS_FOR_PERSONAL_REFERENCE ? mean(referenceValues) : null;
+
+    return {
+      date: today,
+      codingHours,
+      source,
+      referenceHours: personalAverage ?? DEFAULT_REFERENCE_HOURS,
+      referenceIsPersonal: personalAverage !== null,
+    };
+  },
+});
 
 // --- dataset -------------------------------------------------------------
 

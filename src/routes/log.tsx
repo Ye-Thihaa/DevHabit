@@ -3,7 +3,7 @@ import { useMutation, useQuery } from "convex/react";
 import { useConvexAuth } from "@convex-dev/auth/react";
 import { ConvexError } from "convex/values";
 import { format } from "date-fns";
-import { AlertCircle, CheckCircle2, Github, Loader2 } from "lucide-react";
+import { AlertCircle, CheckCircle2, Github, Loader2, Timer } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { AppNav } from "@/components/app-nav";
@@ -41,7 +41,6 @@ export const Route = createFileRoute("/log")({
   component: DailyLog,
 });
 
-const numberFields = SELF_FIELDS.filter((f) => !f.scale);
 const scaleFields = SELF_FIELDS.filter((f) => f.scale);
 
 const DEFAULTS: Record<string, string> = {
@@ -61,6 +60,14 @@ function DailyLog() {
   const navigate = useNavigate();
   const { isLoading, isAuthenticated } = useConvexAuth();
   const saveDailyLog = useMutation(api.dailyLogs.saveDailyLog);
+  const user = useQuery(api.users.getCurrentUser, isAuthenticated ? {} : "skip");
+  // Once WakaTime is connected, coding hours are measured rather than typed
+  // in — the form stops asking for the one field it can now get elsewhere.
+  const hasWakatime = Boolean(user?.wakatimeApiKey);
+  const numberFields = useMemo(
+    () => SELF_FIELDS.filter((f) => !f.scale && !(hasWakatime && f.key === "codingHours")),
+    [hasWakatime],
+  );
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -150,21 +157,14 @@ function DailyLog() {
     setSaving(true);
     setStatus(null);
     try {
+      // Only the fields actually shown get submitted — when WakaTime is
+      // connected, codingHours is omitted rather than sent as a stale/empty
+      // value, so analytics.buildDataset's measured figure isn't overwritten.
       const payload = Object.fromEntries(
-        SELF_FIELDS.map((f) => [f.key, Number(values[f.key])]),
+        [...numberFields, ...scaleFields].map((f) => [f.key, Number(values[f.key])]),
       ) as Record<string, number>;
 
-      const result = await saveDailyLog({
-        date: dateStr,
-        codingHours: payload.codingHours,
-        sleepHours: payload.sleepHours,
-        coffeeIntake: payload.coffeeIntake,
-        aiToolUsageMinutes: payload.aiToolUsageMinutes,
-        problemsSolved: payload.problemsSolved,
-        taskDifficulty: payload.taskDifficulty,
-        experienceLevel: payload.experienceLevel,
-        programmingScore: payload.programmingScore,
-      });
+      const result = await saveDailyLog({ date: dateStr, ...payload });
 
       setStatus({
         kind: "success",
@@ -217,6 +217,16 @@ function DailyLog() {
             rather than remembered.
           </p>
         </div>
+
+        {hasWakatime && (
+          <div className="mt-3 flex items-start gap-2 rounded-lg border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
+            <Timer className="mt-0.5 size-4 shrink-0" />
+            <p>
+              Coding hours are pulled from WakaTime instead — sync them from the WakaTime ingestion
+              card on the dashboard rather than typing them in here.
+            </p>
+          </div>
+        )}
 
         <form
           onSubmit={onSubmit}

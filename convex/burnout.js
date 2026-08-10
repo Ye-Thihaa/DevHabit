@@ -87,10 +87,15 @@ async function buildWindowRows(ctx, userId, startDate, endDate) {
     });
   }
   for (const wt of wakatime) {
-    const row = ensure(wt.date);
-    // WakaTime's measured hours supersede the self-reported figure when
-    // present — it is the more objective source for the same quantity.
-    row.codingHours = wt.codingSeconds / 3600;
+    // WakaTime's measured hours supersede the self-reported figure — but
+    // only when it actually measured something. The summaries endpoint
+    // returns codingSeconds: 0 for every day in range, including days
+    // before the plugin was installed, so a zero can't be told apart from
+    // "wasn't tracked" — treat it as no measurement rather than a confident
+    // zero that would wipe out real self-reported history.
+    if (wt.codingSeconds > 0) {
+      ensure(wt.date).codingHours = wt.codingSeconds / 3600;
+    }
   }
 
   return [...rows.values()];

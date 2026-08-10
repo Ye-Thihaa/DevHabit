@@ -46,7 +46,11 @@ export default defineSchema({
   dailyLogs: defineTable({
     userId: v.id("users"),
     date: v.string(), // ISO date, e.g. "2026-08-07"
-    codingHours: v.number(),
+    // Optional because it's a fallback: once WakaTime is connected, the
+    // dashboard stops asking for this (WakaTime's measured figure wins in
+    // analytics.buildDataset — see the comment there), so new rows from a
+    // connected user simply won't carry it.
+    codingHours: v.optional(v.number()),
     sleepHours: v.number(),
     coffeeIntake: v.number(),
     aiToolUsageMinutes: v.number(),

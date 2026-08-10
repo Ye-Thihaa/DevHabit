@@ -12,6 +12,7 @@ import { DescriptiveCard } from "@/components/dashboard/descriptive-card";
 import { GithubSyncCard } from "@/components/dashboard/github-sync-card";
 import { LagCard } from "@/components/dashboard/lag-card";
 import { PredictionCard } from "@/components/dashboard/prediction-card";
+import { TodayCodingCard } from "@/components/dashboard/today-coding-card";
 import { TrendsCard } from "@/components/dashboard/trends-card";
 import { WakatimeSyncCard } from "@/components/dashboard/wakatime-sync-card";
 import { WeeklySummaryCard } from "@/components/dashboard/weekly-summary-card";
@@ -127,9 +128,12 @@ function Dashboard() {
 
           <TabsContent value="overview" className="grid grid-cols-1 gap-5 lg:grid-cols-2">
             <Reveal index={0}>
-              <BurnoutCard />
+              <TodayCodingCard />
             </Reveal>
             <Reveal index={1}>
+              <BurnoutCard />
+            </Reveal>
+            <Reveal index={2}>
               <WeeklySummaryCard />
             </Reveal>
           </TabsContent>
