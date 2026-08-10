@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useQuery } from "convex/react";
 
 import { Card } from "@/components/dashboard/card";
+import { TechnicalDetails } from "@/components/dashboard/technical-details";
 import type { DescriptiveStats } from "@/lib/analytics-types";
 import { FIELD_BY_KEY } from "@/lib/fields";
 import { daysAgoStr } from "@/lib/dates";
@@ -28,11 +29,7 @@ export function DescriptiveCard() {
   });
 
   return (
-    <Card
-      title="Descriptive statistics"
-      description="The five-number summary behind every chart on this page."
-      icon={Sigma}
-    >
+    <Card title="Your averages" description="What a typical day looks like, per habit." icon={Sigma}>
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex rounded-lg border border-border p-0.5">
           {RANGES.map((r) => (
@@ -65,69 +62,101 @@ export function DescriptiveCard() {
       {stats === undefined ? (
         <p className="mt-5 text-sm text-muted-foreground">Loading…</p>
       ) : (
-        <div className="mt-4 -mx-1 overflow-x-auto">
-          <table className="w-full min-w-[640px] px-1 text-sm">
-            <thead>
-              <tr className="border-b border-border text-xs text-muted-foreground">
-                <th className="py-2 text-left font-normal">Field</th>
-                <th className="py-2 text-right font-normal">n</th>
-                <th className="py-2 text-right font-normal">mean</th>
-                <th className="py-2 text-right font-normal">sd</th>
-                <th className="py-2 text-right font-normal">min</th>
-                <th className="py-2 text-right font-normal">median</th>
-                <th className="py-2 text-right font-normal">max</th>
-                <th className="py-2 text-right font-normal">missing</th>
-              </tr>
-            </thead>
-            <tbody>
-              {stats.rows.map((row) => (
-                <tr key={row.key} className="border-b border-border/50 last:border-0">
-                  <td className="py-1.5">
-                    <span className="inline-flex items-center gap-1.5 text-xs">
-                      <span
-                        aria-hidden
-                        className={cn(
-                          "size-1.5 rounded-full",
-                          row.source === "github" ? "bg-chart-2" : "bg-chart-5",
-                        )}
-                      />
-                      {FIELD_BY_KEY[row.key]?.label ?? row.label}
-                    </span>
-                  </td>
-                  <td className="stat-num py-1.5 text-right text-xs">{row.n}</td>
-                  <td className="stat-num py-1.5 text-right text-xs">{fmt(row.mean, row.unit)}</td>
-                  <td className="stat-num py-1.5 text-right text-xs text-muted-foreground">
-                    {fmt(row.sd)}
-                  </td>
-                  <td className="stat-num py-1.5 text-right text-xs text-muted-foreground">
-                    {fmt(row.min)}
-                  </td>
-                  <td className="stat-num py-1.5 text-right text-xs">{fmt(row.median)}</td>
-                  <td className="stat-num py-1.5 text-right text-xs text-muted-foreground">
-                    {fmt(row.max)}
-                  </td>
-                  <td
+        <>
+          <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {stats.rows.map((row) => (
+              <div
+                key={row.key}
+                className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-3 py-2"
+              >
+                <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
+                  <span
+                    aria-hidden
                     className={cn(
-                      "stat-num py-1.5 text-right text-xs",
-                      row.missingDays > 0 ? "text-destructive" : "text-muted-foreground",
+                      "size-1.5 rounded-full",
+                      row.source === "github" ? "bg-chart-2" : "bg-chart-5",
                     )}
-                  >
-                    {row.missingDays}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+                  />
+                  {FIELD_BY_KEY[row.key]?.label ?? row.label}
+                </span>
+                <span className="stat-num text-sm font-medium">
+                  {row.mean === null ? "no data yet" : fmt(row.mean, row.unit)}
+                </span>
+              </div>
+            ))}
+          </div>
 
-      <p className="mt-3 text-xs text-muted-foreground">
-        <span className="inline-block size-1.5 rounded-full bg-chart-5 align-middle" />{" "}
-        self-reported ·{" "}
-        <span className="inline-block size-1.5 rounded-full bg-chart-2 align-middle" /> measured
-        from GitHub. sd is the sample standard deviation (n−1); &ldquo;missing&rdquo; counts days in
-        the range with no value for that field.
-      </p>
+          <p className="mt-3 text-xs text-muted-foreground">
+            <span className="inline-block size-1.5 rounded-full bg-chart-5 align-middle" />{" "}
+            self-reported ·{" "}
+            <span className="inline-block size-1.5 rounded-full bg-chart-2 align-middle" /> measured
+            from GitHub.
+          </p>
+
+          <TechnicalDetails label="Show the full breakdown (min, max, missing days...)">
+            <div className="-mx-1 overflow-x-auto">
+              <table className="w-full min-w-[640px] px-1 text-sm">
+                <thead>
+                  <tr className="border-b border-border text-xs text-muted-foreground">
+                    <th className="py-2 text-left font-normal">Field</th>
+                    <th className="py-2 text-right font-normal">n</th>
+                    <th className="py-2 text-right font-normal">mean</th>
+                    <th className="py-2 text-right font-normal">sd</th>
+                    <th className="py-2 text-right font-normal">min</th>
+                    <th className="py-2 text-right font-normal">median</th>
+                    <th className="py-2 text-right font-normal">max</th>
+                    <th className="py-2 text-right font-normal">missing</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {stats.rows.map((row) => (
+                    <tr key={row.key} className="border-b border-border/50 last:border-0">
+                      <td className="py-1.5">
+                        <span className="inline-flex items-center gap-1.5 text-xs">
+                          <span
+                            aria-hidden
+                            className={cn(
+                              "size-1.5 rounded-full",
+                              row.source === "github" ? "bg-chart-2" : "bg-chart-5",
+                            )}
+                          />
+                          {FIELD_BY_KEY[row.key]?.label ?? row.label}
+                        </span>
+                      </td>
+                      <td className="stat-num py-1.5 text-right text-xs">{row.n}</td>
+                      <td className="stat-num py-1.5 text-right text-xs">
+                        {fmt(row.mean, row.unit)}
+                      </td>
+                      <td className="stat-num py-1.5 text-right text-xs text-muted-foreground">
+                        {fmt(row.sd)}
+                      </td>
+                      <td className="stat-num py-1.5 text-right text-xs text-muted-foreground">
+                        {fmt(row.min)}
+                      </td>
+                      <td className="stat-num py-1.5 text-right text-xs">{fmt(row.median)}</td>
+                      <td className="stat-num py-1.5 text-right text-xs text-muted-foreground">
+                        {fmt(row.max)}
+                      </td>
+                      <td
+                        className={cn(
+                          "stat-num py-1.5 text-right text-xs",
+                          row.missingDays > 0 ? "text-destructive" : "text-muted-foreground",
+                        )}
+                      >
+                        {row.missingDays}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="mt-3 text-xs text-muted-foreground">
+              sd is the sample standard deviation (n−1); &ldquo;missing&rdquo; counts days in the
+              range with no value for that field.
+            </p>
+          </TechnicalDetails>
+        </>
+      )}
     </Card>
   );
 }

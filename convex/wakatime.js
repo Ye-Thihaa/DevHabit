@@ -43,15 +43,30 @@ export const syncRecent = action({
     try {
       const response = await fetch(url, {
         headers: {
-          Authorization: `Basic ${btoa(apiKey)}`,
+          // WakaTime's Basic auth is base64(api_key + ":") — a bare key
+          // without the trailing colon is rejected.
+          Authorization: `Basic ${btoa(`${apiKey}:`)}`,
+          Accept: "application/json",
+          "User-Agent": "DevHabit (github.com/Ye-Thihaa/DevHabit)",
         },
       });
       if (!response.ok) {
         const text = await response.text();
         throw new ConvexError(`WakaTime API error (${response.status}): ${text.slice(0, 300)}`);
       }
+      const contentType = response.headers.get("content-type") ?? "";
+      if (!contentType.includes("application/json")) {
+        const text = await response.text();
+        throw new ConvexError(
+          `WakaTime returned a non-JSON response (content-type: ${contentType || "unknown"}): ${text.slice(0, 300)}`,
+        );
+      }
       payload = await response.json();
     } catch (err) {
+      const message =
+        err instanceof ConvexError
+          ? String(err.data)
+          : `${err instanceof Error ? err.name : "Error"}: ${err instanceof Error ? err.message : String(err)}`;
       await ctx.runMutation(internal.wakatime.recordSyncRun, {
         userId,
         kind: "wakatime",
@@ -59,9 +74,9 @@ export const syncRecent = action({
         endDate,
         daysWritten: 0,
         status: "error",
-        message: err instanceof ConvexError ? String(err.data) : "Network error reaching WakaTime",
+        message,
       });
-      throw err;
+      throw err instanceof ConvexError ? err : new ConvexError(message);
     }
 
     const rows = (payload.data ?? []).map((day) => ({
