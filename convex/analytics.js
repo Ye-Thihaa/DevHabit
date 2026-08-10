@@ -43,19 +43,32 @@ async function buildDataset(ctx, userId, startDate, endDate, { includeSeeded = t
         ? q.eq("userId", userId).gte("date", startDate).lte("date", endDate)
         : q.eq("userId", userId),
     );
+  const wakatimeQuery = ctx.db
+    .query("wakatimeDaily")
+    .withIndex("by_user_and_date", (q) =>
+      startDate && endDate
+        ? q.eq("userId", userId).gte("date", startDate).lte("date", endDate)
+        : q.eq("userId", userId),
+    );
 
-  const [logs, github] = await Promise.all([logsQuery.collect(), githubQuery.collect()]);
+  const [logs, github, wakatime] = await Promise.all([
+    logsQuery.collect(),
+    githubQuery.collect(),
+    wakatimeQuery.collect(),
+  ]);
 
   const usableLogs = includeSeeded ? logs : logs.filter((l) => l.isSeeded !== true);
 
   const logByDate = new Map(usableLogs.map((l) => [l.date, l]));
   const ghByDate = new Map(github.map((g) => [g.date, g]));
+  const wtByDate = new Map(wakatime.map((w) => [w.date, w]));
 
-  const dates = [...new Set([...logByDate.keys(), ...ghByDate.keys()])].sort();
+  const dates = [...new Set([...logByDate.keys(), ...ghByDate.keys(), ...wtByDate.keys()])].sort();
 
   return dates.map((date) => {
     const log = logByDate.get(date);
     const gh = ghByDate.get(date);
+    const wt = wtByDate.get(date);
     const row = { date };
 
     for (const key of SELF_FIELDS) {
@@ -77,9 +90,11 @@ async function buildDataset(ctx, userId, startDate, endDate, { includeSeeded = t
     row.reposTouched = gh?.reposTouched ?? null;
     row.nightCommits = gh?.commitsByBucket?.night ?? null;
     row.commitsByBucket = gh?.commitsByBucket ?? null;
+    row.longestSessionMinutes = wt?.longestSessionMinutes ?? null;
 
     row.hasSelfReported = Boolean(log);
     row.hasGithub = Boolean(gh);
+    row.hasWakatime = Boolean(wt);
     row.isSeeded = log?.isSeeded === true;
     row.githubDetailLevel = gh?.detailLevel ?? null;
 

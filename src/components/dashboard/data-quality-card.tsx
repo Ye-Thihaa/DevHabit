@@ -217,7 +217,7 @@ export function DataQualityCard() {
                       aria-hidden
                       className={cn(
                         "size-1.5 rounded-full",
-                        field.source === "github" ? "bg-chart-2" : "bg-chart-5",
+                        field.source !== "self" ? "bg-chart-2" : "bg-chart-5",
                       )}
                     />
                     {field.label}

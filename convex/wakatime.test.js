@@ -3,6 +3,7 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import { ConvexError } from "convex/values";
 import { api, internal } from "./_generated/api";
 import schema from "./schema";
+import { longestSessionMinutes } from "./wakatime.js";
 
 async function signInAs(t, userId) {
   return t.withIdentity({ subject: userId });
@@ -99,6 +100,41 @@ describe("syncRecent", () => {
     expect(syncRuns[0].daysWritten).toBe(2);
   });
 
+  test("fills in longestSessionMinutes from the durations endpoint, per day", async () => {
+    const t = convexTest(schema);
+    const userId = await makeUser(t, { wakatimeApiKey: "waka_test_key" });
+    const asUser = await signInAs(t, userId);
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(async (url) => {
+        if (url.includes("/summaries")) {
+          return jsonResponse({
+            data: [
+              { range: { date: "2026-08-09" }, grand_total: { total_seconds: 7200 }, languages: [] },
+              { range: { date: "2026-08-10" }, grand_total: { total_seconds: 1800 }, languages: [] },
+            ],
+          });
+        }
+        // /durations?date=...
+        if (url.includes("date=2026-08-09")) {
+          return jsonResponse({ data: [{ time: 0, duration: 2 * 60 * 60 }] });
+        }
+        // 2026-08-10's durations call fails — should not break the sync.
+        return { ok: false, status: 500, headers: { get: () => "text/plain" }, text: async () => "oops" };
+      }),
+    );
+
+    const result = await asUser.action(api.wakatime.syncRecent, { days: 2 });
+    expect(result.daysWritten).toBe(2);
+
+    const rows = await t.run(async (ctx) => ctx.db.query("wakatimeDaily").collect());
+    const day1 = rows.find((r) => r.date === "2026-08-09");
+    const day2 = rows.find((r) => r.date === "2026-08-10");
+    expect(day1.longestSessionMinutes).toBe(120);
+    expect(day2.longestSessionMinutes).toBeUndefined();
+  });
+
   test("re-syncing the same day updates the existing row instead of duplicating it", async () => {
     const t = convexTest(schema);
     const userId = await makeUser(t, { wakatimeApiKey: "waka_test_key" });
@@ -183,6 +219,44 @@ describe("syncRecent", () => {
     const spanDays =
       (new Date(result.endDate).getTime() - new Date(result.startDate).getTime()) / 86_400_000 + 1;
     expect(spanDays).toBe(30);
+  });
+});
+
+describe("longestSessionMinutes", () => {
+  test("returns null for no blocks", () => {
+    expect(longestSessionMinutes([])).toBeNull();
+    expect(longestSessionMinutes(null)).toBeNull();
+  });
+
+  test("a single block is its own session", () => {
+    const blocks = [{ time: 1000, duration: 1800 }]; // 30 minutes
+    expect(longestSessionMinutes(blocks)).toBe(30);
+  });
+
+  test("merges blocks separated by a small gap into one sitting", () => {
+    const blocks = [
+      { time: 0, duration: 3600 }, // 0:00–1:00
+      { time: 3600 + 5 * 60, duration: 3600 }, // 1:05–2:05, 5 min gap
+    ];
+    // Merged span is 0:00 to 2:05 = 125 minutes, not 60+60=120.
+    expect(longestSessionMinutes(blocks)).toBe(125);
+  });
+
+  test("does not merge across a gap over 15 minutes, and reports the longer side", () => {
+    const blocks = [
+      { time: 0, duration: 60 * 60 }, // 60-minute session
+      { time: 60 * 60 + 20 * 60, duration: 3 * 60 * 60 }, // 20 min later, a 3-hour session
+    ];
+    expect(longestSessionMinutes(blocks)).toBe(180);
+  });
+
+  test("is order-independent", () => {
+    const inOrder = [
+      { time: 0, duration: 600 },
+      { time: 700, duration: 600 },
+    ];
+    const reversed = [inOrder[1], inOrder[0]];
+    expect(longestSessionMinutes(reversed)).toBe(longestSessionMinutes(inOrder));
   });
 });
 

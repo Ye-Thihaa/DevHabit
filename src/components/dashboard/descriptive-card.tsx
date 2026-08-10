@@ -74,7 +74,7 @@ export function DescriptiveCard() {
                     aria-hidden
                     className={cn(
                       "size-1.5 rounded-full",
-                      row.source === "github" ? "bg-chart-2" : "bg-chart-5",
+                      row.source !== "self" ? "bg-chart-2" : "bg-chart-5",
                     )}
                   />
                   {FIELD_BY_KEY[row.key]?.label ?? row.label}
@@ -90,7 +90,7 @@ export function DescriptiveCard() {
             <span className="inline-block size-1.5 rounded-full bg-chart-5 align-middle" />{" "}
             self-reported ·{" "}
             <span className="inline-block size-1.5 rounded-full bg-chart-2 align-middle" /> measured
-            from GitHub.
+            (GitHub or WakaTime).
           </p>
 
           <TechnicalDetails label="Show the full breakdown (min, max, missing days...)">
@@ -117,7 +117,7 @@ export function DescriptiveCard() {
                             aria-hidden
                             className={cn(
                               "size-1.5 rounded-full",
-                              row.source === "github" ? "bg-chart-2" : "bg-chart-5",
+                              row.source !== "self" ? "bg-chart-2" : "bg-chart-5",
                             )}
                           />
                           {FIELD_BY_KEY[row.key]?.label ?? row.label}

@@ -109,6 +109,12 @@ export default defineSchema({
     date: v.string(),
     codingSeconds: v.number(),
     languages: v.optional(v.array(v.object({ name: v.string(), seconds: v.number() }))),
+    // Longest unbroken coding stretch that day, from WakaTime's Durations API
+    // (heartbeat blocks merged across gaps under 15 minutes). Optional because
+    // it comes from a second, best-effort request per day — a summaries-only
+    // sync (or one where a single day's durations call failed) still has
+    // codingSeconds without this.
+    longestSessionMinutes: v.optional(v.number()),
     fetchedAt: v.number(),
   })
     .index("by_user_and_date", ["userId", "date"])

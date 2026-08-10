@@ -103,7 +103,7 @@ export function CorrelationsCard() {
                           aria-hidden
                           className={cn(
                             "size-1.5 rounded-full",
-                            row.source === "github" ? "bg-chart-2" : "bg-chart-5",
+                            row.source !== "self" ? "bg-chart-2" : "bg-chart-5",
                           )}
                         />
                         {row.label}
