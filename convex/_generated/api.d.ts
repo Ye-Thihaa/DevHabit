@@ -10,6 +10,7 @@
 
 import type * as analytics from "../analytics.js";
 import type * as auth from "../auth.js";
+import type * as burnout from "../burnout.js";
 import type * as dailyLogs from "../dailyLogs.js";
 import type * as github from "../github.js";
 import type * as http from "../http.js";
@@ -22,6 +23,7 @@ import type * as migrations from "../migrations.js";
 import type * as predictions from "../predictions.js";
 import type * as seed from "../seed.js";
 import type * as users from "../users.js";
+import type * as wakatime from "../wakatime.js";
 import type * as weeklySummary from "../weeklySummary.js";
 
 import type {
@@ -33,6 +35,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   analytics: typeof analytics;
   auth: typeof auth;
+  burnout: typeof burnout;
   dailyLogs: typeof dailyLogs;
   github: typeof github;
   http: typeof http;
@@ -45,6 +48,7 @@ declare const fullApi: ApiFromModules<{
   predictions: typeof predictions;
   seed: typeof seed;
   users: typeof users;
+  wakatime: typeof wakatime;
   weeklySummary: typeof weeklySummary;
 }>;
 
