@@ -57,15 +57,20 @@ data quality, and burnout risk — on a Convex-backed dashboard.
   WakaTime's Durations API and merged into one "sitting" (gaps under 15 min
   don't count as a break) — slots into the existing Correlations/Lag/
   Prediction cards as a normal field, no new UI needed.
-- **New-user cold start**: added a live **Today** ring
+- **New-user cold start**: added a **Today** card
   ([today-coding-card.tsx](src/components/dashboard/today-coding-card.tsx),
-  first card on the Overview tab) showing coding hours so far today against
-  the user's own trailing-30-day average once they have 5+ days of one, or a
-  neutral 4h reference before that — so day-one users get something
-  meaningful instead of empty 30/90-day charts.
+  first card on the Overview tab) showing coding hours so far today — as a
+  digital-clock-style HH:MM readout — against the user's own trailing-30-day
+  average once they have 5+ days of one, or a neutral 4h reference before
+  that — so day-one users get something meaningful instead of empty
+  30/90-day charts.
 - **WakaTime auto-sync cron** ([convex/crons.js](convex/crons.js)): every 20
-  minutes, syncs the last 2 days for every connected user, so the Today ring
-  (and everything else) updates without a manual "Sync" click.
+  minutes, syncs the last 2 days for every connected user, so the Today card
+  (and everything else) refreshes without a manual "Sync" click. Not a
+  live-ticking stopwatch — the number only changes when a sync writes new
+  data, so it can lag up to ~20 minutes; confirmed as an acceptable
+  trade-off (see conversation) rather than building a sub-minute sync or a
+  client-side extrapolated tick.
 - **Fixed a real bug**: WakaTime's summaries endpoint returns
   `codingSeconds: 0` for every day in range, including days before the
   plugin was installed — `buildDataset` (and `burnout.js`) were treating
