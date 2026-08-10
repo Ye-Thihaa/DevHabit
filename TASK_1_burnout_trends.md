@@ -1,38 +1,31 @@
 # Task 1: Burnout Score History & Trend Chart
 
-**Branch**: `feat/burnout-trends` (off `dev`)
+**Status: ✅ Done** (2026-08-10, on `feat/burnout-wakatime-tracking` directly
+rather than a separate teammate branch — see PROGRESS_REPORT.md).
 
-## Goal
+## What actually got built
 
-The burnout card ([src/components/dashboard/burnout-card.tsx](src/components/dashboard/burnout-card.tsx))
-currently shows a single point-in-time score. Add historical tracking so
-users can see how burnout risk changes week over week.
+- `convex/schema.js` — new `burnoutHistory` table (userId, date, score,
+  level, sampleSize, ranAt).
+- `convex/burnout.js` — the scoring logic was factored out into an exported
+  `computeBurnoutRisk(ctx, userId)` so it can be reused outside a
+  signed-in-user query context.
+- `convex/burnoutHistory.js` — `snapshotAllUsers` (internal mutation, called
+  daily by a cron) and `getBurnoutHistory` (public query, last N days).
+- `convex/crons.js` — daily snapshot at 23:50 UTC.
+- `src/components/dashboard/burnout-trend-card.tsx` — recharts line chart,
+  dashed reference lines at the 33/66 thresholds, dot color per day's risk
+  level. Wired into the Overview tab.
+- Bonus (folds in the "cross-source correlation" open item too):
+  `burnoutHistory` is joined into `analytics.buildDataset` as a new
+  `burnoutScore` field, so it's usable in the Correlations/Lag/Prediction
+  cards like any other field — no separate feature needed for that.
+- Tests: `convex/burnoutHistory.test.js` (6 cases — insufficient-data skip,
+  score matches the live query, upsert-not-duplicate, sort order, cross-user
+  isolation).
 
-## Scope (new files only — avoid touching shared files)
+## Known limitation
 
-- **New**: `convex/burnoutHistory.js` — a Convex query/mutation module that
-  snapshots the burnout score (reuse the calculation in
-  [convex/burnout.js](convex/burnout.js) as a read-only import, don't modify it)
-  into a new table.
-- **Schema**: add a new table `burnoutHistory` to [convex/schema.js](convex/schema.js)
-  — coordinate timing with teammates since this file is shared; add your
-  table as a separate, additive block at the end of the file to minimize
-  diff overlap.
-- **New**: `src/components/dashboard/burnout-trend-card.tsx` — a new card
-  component rendering a line/sparkline chart of burnout score over time
-  (reuse existing chart patterns from [src/components/dashboard/trends-card.tsx](src/components/dashboard/trends-card.tsx)
-  for consistency, but don't edit that file).
-- **Route wiring**: add the new card to [src/routes/dashboard.tsx](src/routes/dashboard.tsx)
-  — this file will be touched by other tasks too, so make a small, isolated
-  addition (one import + one JSX line) to reduce conflict surface.
-
-## Out of scope
-
-- Do not modify `convex/burnout.js`, `convex/wakatime.js`, or
-  `burnout-card.tsx` — those are owned by other tasks/already done.
-
-## Acceptance criteria
-
-- A scheduled or on-demand snapshot mechanism records burnout score history.
-- New card shows a trend line for at least the last 8 weeks.
-- No changes to existing burnout calculation logic.
+History only exists from the day this shipped forward — there's no
+backfill, so the trend chart needs a few real days to accumulate before it
+shows a line (handled gracefully with a "not enough history yet" state).

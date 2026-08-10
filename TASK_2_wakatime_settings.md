@@ -1,33 +1,30 @@
 # Task 2: WakaTime Settings UI (API Key & Sync Config)
 
-**Branch**: `feat/wakatime-settings` (off `dev`)
+**Status: ✅ Done**, with one deliberate deviation from the original plan
+below.
 
-## Goal
+## What actually got built
 
-WakaTime sync ([convex/wakatime.js](convex/wakatime.js), [src/components/dashboard/wakatime-sync-card.tsx](src/components/dashboard/wakatime-sync-card.tsx))
-exists but there's no UI for a user to configure their own WakaTime API key
-or sync preferences. Add a settings page/section for this.
+- `convex/users.js` — new `clearWakatimeApiKey` mutation (the existing
+  `setWakatimeApiKey` already covered create/replace via upsert).
+- `src/routes/settings.tsx` — new page: masked key display, "Replace key",
+  and "Remove" (with a confirm step before it actually deletes).
+- `src/components/app-nav.tsx` — "Settings" nav link.
+- `src/components/dashboard/wakatime-sync-card.tsx` — once a key is saved,
+  it now links to Settings for replace/remove instead of being a dead end.
 
-## Scope (new files only)
+## Deviation from the original brief
 
-- **New**: `src/routes/settings.tsx` — new route with a form for entering/
-  updating a WakaTime API key and sync frequency preference.
-- **New**: `convex/userSettings.js` — mutations/queries to store per-user
-  WakaTime API key (store securely, never log it) and preferences.
-- **Schema**: add a `userSettings` table to [convex/schema.js](convex/schema.js)
-  — same as Task 1, append as an additive block at the end of the file to
-  reduce merge conflicts; coordinate ordering with teammates before merging.
-- **Nav link**: add a "Settings" link in [src/routes/__root.tsx](src/routes/__root.tsx)
-  (small, isolated addition).
+The original brief proposed a new `userSettings` table with a "sync
+frequency preference" field. That turned out to be unnecessary:
 
-## Out of scope
+- The WakaTime key already lives on the `users` table
+  (`users.wakatimeApiKey`) — adding a second table for the same value would
+  just be indirection.
+- "Sync frequency" became moot once the auto-sync cron
+  (`convex/crons.js`, every 20 minutes for every connected user) shipped as
+  part of the Today-card work — there's no per-user setting to configure,
+  it's just always on once connected.
 
-- Do not modify `convex/wakatime.js` sync logic itself or
-  `wakatime-sync-card.tsx` — just add a way to configure what those already
-  use.
-
-## Acceptance criteria
-
-- User can enter and save a WakaTime API key from `/settings`.
-- Key is never displayed in plaintext after saving (masked).
-- Existing WakaTime sync card continues to work unchanged.
+So Settings manages the one thing that actually needed managing — the key
+itself — rather than a speculative preferences table.

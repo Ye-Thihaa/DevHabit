@@ -81,27 +81,41 @@ data quality, and burnout risk — on a Convex-backed dashboard.
   is removed from the form entirely (schema/mutation made it optional)
   instead of asking for something the app now measures itself; users
   without WakaTime keep the field as before.
+- **[TASK_1](TASK_1_burnout_trends.md) — Burnout trend history**: new
+  `burnoutHistory` table, snapshotted daily by a cron
+  (`convex/burnoutHistory.js`), charted in `burnout-trend-card.tsx`. Also
+  joined into `analytics.buildDataset` as a `burnoutScore` field, which
+  resolves the "cross-source correlation" open item too — it's now just
+  another field in the existing Correlations/Lag/Prediction cards.
+- **[TASK_2](TASK_2_wakatime_settings.md) — WakaTime key management**: new
+  `/settings` page (masked key, replace, remove with confirm), linked from
+  the nav and from the WakaTime sync card. Built leaner than originally
+  scoped — no new `userSettings` table, since the key already lives on
+  `users` and "sync frequency" became moot once the auto-sync cron shipped.
+- **[TASK_3](TASK_3_alerts_notifications.md) — High-burnout-risk alert**:
+  dismissible banner on the dashboard when risk is "high", reading the
+  existing `getBurnoutRisk` query directly rather than a new alerts table.
+  Dismissal is per-day via sessionStorage.
+- **Tests**: 33 total now (6 more for the burnout-history snapshot logic).
+- **Mobile responsiveness**: checked at 375px — nav, stat tiles, tabs, and
+  card grids all reflow to a single column correctly.
 
 ## Existing dashboard surface
 
 `src/components/dashboard/`: card, correlations-card, data-quality-card,
 descriptive-card, github-sync-card, lag-card, prediction-card, trends-card,
-weekly-summary-card, burnout-card, wakatime-sync-card, technical-details,
-today-coding-card.
+weekly-summary-card, burnout-card, burnout-trend-card, wakatime-sync-card,
+technical-details, today-coding-card, alert-banner.
 
 ## Open areas / not yet started
 
-- Cross-source correlation between WakaTime time and burnout score.
-- Historical trend charts for burnout over time (currently point-in-time only) — [TASK_1](TASK_1_burnout_trends.md).
-- Notifications/alerts when burnout risk crosses a threshold — [TASK_3](TASK_3_alerts_notifications.md).
-- Settings UI for configuring/replacing the WakaTime API key per user — [TASK_2](TASK_2_wakatime_settings.md).
-- Mobile responsiveness pass on the new tabbed dashboard layout — not verified yet.
+Nothing outstanding from the original task split — [TASK_1](TASK_1_burnout_trends.md),
+[TASK_2](TASK_2_wakatime_settings.md), and [TASK_3](TASK_3_alerts_notifications.md)
+are all done (see each file for what shipped vs. what was originally
+scoped). Possible next work, none currently planned:
 
-## Next steps
-
-See the three task briefs below, split to touch non-overlapping files so
-teammates can work in parallel without merge conflicts:
-
-1. [TASK_1_burnout_trends.md](TASK_1_burnout_trends.md)
-2. [TASK_2_wakatime_settings.md](TASK_2_wakatime_settings.md)
-3. [TASK_3_alerts_notifications.md](TASK_3_alerts_notifications.md)
+- Backfilling burnout history for dates before this feature shipped (not
+  possible — the underlying daily logs/commits still exist, so a one-time
+  backfill script could compute historical scores if wanted).
+- A "days connected" indicator so WakaTime/GitHub coverage gaps are more
+  visible at a glance than the existing Data Quality card already makes them.
