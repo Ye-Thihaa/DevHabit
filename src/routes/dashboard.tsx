@@ -5,6 +5,7 @@ import { Loader2 } from "lucide-react";
 import { useEffect } from "react";
 
 import { AppNav } from "@/components/app-nav";
+import { BurnoutCard } from "@/components/dashboard/burnout-card";
 import { CorrelationsCard } from "@/components/dashboard/correlations-card";
 import { DataQualityCard } from "@/components/dashboard/data-quality-card";
 import { DescriptiveCard } from "@/components/dashboard/descriptive-card";
@@ -12,6 +13,7 @@ import { GithubSyncCard } from "@/components/dashboard/github-sync-card";
 import { LagCard } from "@/components/dashboard/lag-card";
 import { PredictionCard } from "@/components/dashboard/prediction-card";
 import { TrendsCard } from "@/components/dashboard/trends-card";
+import { WakatimeSyncCard } from "@/components/dashboard/wakatime-sync-card";
 import { WeeklySummaryCard } from "@/components/dashboard/weekly-summary-card";
 import { useTimezoneSync } from "@/hooks/use-timezone-sync";
 import type { SummaryStats } from "@/lib/analytics-types";
@@ -103,7 +105,9 @@ function Dashboard() {
         )}
 
         <div className="mt-6 space-y-5">
+          <BurnoutCard />
           <GithubSyncCard />
+          <WakatimeSyncCard />
           <DataQualityCard />
           <DescriptiveCard />
           <TrendsCard />
