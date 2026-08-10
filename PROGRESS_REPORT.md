@@ -49,18 +49,40 @@ data quality, and burnout risk — on a Convex-backed dashboard.
   `claude-code-wakatime` plugin is installed and sending heartbeats, so
   coding time spent in Claude Code on this repo counts toward WakaTime (and
   from there, into the dashboard).
+- **Tests**: Vitest + `convex-test` added (none existed before). 27 tests
+  covering `getBurnoutRisk`/`getBurnoutAssessment`, WakaTime sync (auth
+  encoding, upserts, the 30-day cap, both failure paths), the session-length
+  merge logic, and the coding-hours source-priority logic below. `npm test`.
+- **Session length**: new `wakatimeDaily.longestSessionMinutes`, pulled from
+  WakaTime's Durations API and merged into one "sitting" (gaps under 15 min
+  don't count as a break) — slots into the existing Correlations/Lag/
+  Prediction cards as a normal field, no new UI needed.
+- **New-user cold start**: added a live **Today** ring
+  ([today-coding-card.tsx](src/components/dashboard/today-coding-card.tsx),
+  first card on the Overview tab) showing coding hours so far today against
+  the user's own trailing-30-day average once they have 5+ days of one, or a
+  neutral 4h reference before that — so day-one users get something
+  meaningful instead of empty 30/90-day charts.
+- **WakaTime auto-sync cron** ([convex/crons.js](convex/crons.js)): every 20
+  minutes, syncs the last 2 days for every connected user, so the Today ring
+  (and everything else) updates without a manual "Sync" click.
+- **Fixed a real bug**: WakaTime's summaries endpoint returns
+  `codingSeconds: 0` for every day in range, including days before the
+  plugin was installed — `buildDataset` (and `burnout.js`) were treating
+  that as a confident zero and overriding real self-reported history with
+  it. A zero now falls back to self-reported instead. New
+  `codingHoursSource` field makes the resolved source explicit.
+- **Daily Log form**: once a user connects WakaTime, the Coding Hours field
+  is removed from the form entirely (schema/mutation made it optional)
+  instead of asking for something the app now measures itself; users
+  without WakaTime keep the field as before.
 
 ## Existing dashboard surface
 
 `src/components/dashboard/`: card, correlations-card, data-quality-card,
 descriptive-card, github-sync-card, lag-card, prediction-card, trends-card,
-weekly-summary-card, burnout-card, wakatime-sync-card, technical-details.
-
-## In progress
-
-- **Tests** for `convex/burnout.js` and `convex/wakatime.js` — no test
-  framework exists in the repo yet, so this starts with adding one
-  (Vitest) before writing the burnout-scoring and sync-logic test cases.
+weekly-summary-card, burnout-card, wakatime-sync-card, technical-details,
+today-coding-card.
 
 ## Open areas / not yet started
 
