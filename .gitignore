@@ -35,3 +35,6 @@ dist-ssr
 # Keep database dumps out of the repo entirely.
 backups/
 *.zip
+
+# Personal Claude Code permission grants — not shared config.
+.claude/settings.local.json

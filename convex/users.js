@@ -29,6 +29,21 @@ export const setGithubUsername = mutation({
   },
 });
 
+export const setWakatimeApiKey = mutation({
+  args: { wakatimeApiKey: v.string() },
+  handler: async (ctx, { wakatimeApiKey }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new ConvexError("Not signed in");
+    }
+    const trimmed = wakatimeApiKey.trim();
+    if (!trimmed) {
+      throw new ConvexError("WakaTime API key cannot be empty");
+    }
+    await ctx.db.patch(userId, { wakatimeApiKey: trimmed });
+  },
+});
+
 // Records the browser's UTC offset so commit timestamps can be bucketed by the
 // developer's own clock rather than UTC. Called automatically on the dashboard;
 // see the note on users.timezoneOffsetMinutes in schema.js for the sign

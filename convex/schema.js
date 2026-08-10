@@ -29,6 +29,7 @@ export default defineSchema({
     phoneVerificationTime: v.optional(v.number()),
     isAnonymous: v.optional(v.boolean()),
     githubUsername: v.optional(v.string()),
+    wakatimeApiKey: v.optional(v.string()),
     // Minutes AHEAD of UTC (Yangon = +390). Note this is the negation of
     // JavaScript's Date.getTimezoneOffset(), which counts the other way — the
     // sign is flipped at the call site so the stored value reads naturally.
@@ -100,11 +101,29 @@ export default defineSchema({
     .index("by_user_and_date", ["userId", "date"])
     .index("by_user", ["userId"]),
 
+  // LAYER 1c — measured. Written only by convex/wakatime.js. Kept apart from
+  // dailyLogs.codingHours for the same reason githubDaily is kept apart from
+  // it: this is fetched from an external API, not typed in.
+  wakatimeDaily: defineTable({
+    userId: v.id("users"),
+    date: v.string(),
+    codingSeconds: v.number(),
+    languages: v.optional(v.array(v.object({ name: v.string(), seconds: v.number() }))),
+    fetchedAt: v.number(),
+  })
+    .index("by_user_and_date", ["userId", "date"])
+    .index("by_user", ["userId"]),
+
   // LAYER 2 — ingestion audit. Every backfill/sync appends one row, including
   // failures, so the dataset's coverage is explainable after the fact.
   syncRuns: defineTable({
     userId: v.id("users"),
-    kind: v.union(v.literal("calendar"), v.literal("detailed"), v.literal("migration")),
+    kind: v.union(
+      v.literal("calendar"),
+      v.literal("detailed"),
+      v.literal("migration"),
+      v.literal("wakatime"),
+    ),
     startDate: v.string(),
     endDate: v.string(),
     daysWritten: v.number(),
