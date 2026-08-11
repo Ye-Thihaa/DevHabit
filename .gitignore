@@ -43,3 +43,4 @@ backups/
 
 # Personal Claude Code permission grants — not shared config.
 .claude/settings.local.json
+.env*

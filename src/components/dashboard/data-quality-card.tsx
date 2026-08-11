@@ -19,6 +19,10 @@ function pct(value: number, total: number) {
 
 export function DataQualityCard() {
   const quality: DataQuality | null | undefined = useQuery(api.analytics.getDataQuality, {});
+  // Seeding is off on production deployments (see convex/seed.js). Both
+  // controls come out entirely rather than rendering disabled — a greyed
+  // button on a live app invites "why can't I click this".
+  const seedingEnabled = useQuery(api.seed.isSeedingEnabled, {}) === true;
   const generateSeed = useMutation(api.seed.generateSeedData);
   const clearSeed = useMutation(api.seed.clearSeedData);
 
@@ -58,13 +62,16 @@ export function DataQualityCard() {
       ) : quality === null || quality.totalDays === 0 ? (
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            No data yet. Back-fill from GitHub for the measured side, and either log days by hand or
-            generate labelled seed data to exercise the analysis.
+            {seedingEnabled
+              ? "No data yet. Back-fill from GitHub for the measured side, and either log days by hand or generate labelled seed data to exercise the analysis."
+              : "No data yet. Back-fill from GitHub for the measured side, and log a day or two from the daily log for the self-reported side."}
           </p>
-          <Button variant="outline" disabled={busy !== null} onClick={() => run("seed")}>
-            {busy === "seed" && <Loader2 className="size-4 animate-spin" />}
-            Generate 90 days of seed data
-          </Button>
+          {seedingEnabled && (
+            <Button variant="outline" disabled={busy !== null} onClick={() => run("seed")}>
+              {busy === "seed" && <Loader2 className="size-4 animate-spin" />}
+              Generate 90 days of seed data
+            </Button>
+          )}
         </div>
       ) : (
         <div className="space-y-6">
@@ -128,17 +135,23 @@ export function DataQualityCard() {
                 These are generated, not observed. Every chart can exclude them, and the AI summary
                 is told which rows they are.
               </p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={busy !== null}
-                  onClick={() => run("clear")}
-                >
-                  {busy === "clear" && <Loader2 className="size-4 animate-spin" />}
-                  Remove seed data
-                </Button>
-              </div>
+              {/* The count still shows when seeding is disabled — knowing some
+                  rows are generated matters more than being able to act on it
+                  here. Removing them on such a deployment is a CLI job
+                  (maintenance:clearSeededLogs). */}
+              {seedingEnabled && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={busy !== null}
+                    onClick={() => run("clear")}
+                  >
+                    {busy === "clear" && <Loader2 className="size-4 animate-spin" />}
+                    Remove seed data
+                  </Button>
+                </div>
+              )}
             </div>
           )}
 

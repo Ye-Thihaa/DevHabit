@@ -46,3 +46,34 @@ export const purgeUserData = internalMutation({
     return { userId, githubUsername: user.githubUsername, deleted };
   },
 });
+
+// The escape hatch for a deployment where seeding is disabled (production).
+// seed.clearSeedData refuses to run there, so if seeded rows ever do reach
+// production — imported, or written while the flag was briefly on — this is
+// how they come out:
+//
+//   npx convex run --prod maintenance:clearSeededLogs '{"userId":"..."}'
+//
+// Only ever deletes rows carrying isSeeded: true, so it cannot touch a real
+// entry even if pointed at the wrong account. Omitting userId sweeps every
+// user, which is the usual case when cleaning a deployment.
+export const clearSeededLogs = internalMutation({
+  args: { userId: v.optional(v.id("users")) },
+  handler: async (ctx, { userId }) => {
+    const logs = userId
+      ? await ctx.db
+          .query("dailyLogs")
+          .withIndex("by_user", (q) => q.eq("userId", userId))
+          .collect()
+      : await ctx.db.query("dailyLogs").collect();
+
+    let deleted = 0;
+    for (const log of logs) {
+      if (log.isSeeded === true) {
+        await ctx.db.delete(log._id);
+        deleted++;
+      }
+    }
+    return { scanned: logs.length, deleted };
+  },
+});
