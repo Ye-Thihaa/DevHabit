@@ -14,18 +14,11 @@ import {
 import { Card } from "@/components/dashboard/card";
 import type { DatasetRow, RollingRow } from "@/lib/analytics-types";
 import { CheckToggle } from "@/components/ui/check-toggle";
-import { Segmented } from "@/components/ui/segmented";
 import { FIELDS, type FieldKey } from "@/lib/fields";
 import { daysAgoStr } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 import { api } from "@convex/_generated/api";
 
-const RANGES = [
-  { value: 7, label: "7d" },
-  { value: 30, label: "30d" },
-  { value: 90, label: "90d" },
-  { value: 365, label: "1y" },
-] as const;
 const COLORS = [
   "var(--color-chart-1)",
   "var(--color-chart-2)",
@@ -35,8 +28,7 @@ const COLORS = [
   "var(--color-chart-6)",
 ];
 
-export function TrendsCard() {
-  const [range, setRange] = useState<number>(90);
+export function TrendsCard({ range }: { range: number }) {
   const [smooth, setSmooth] = useState(true);
   const [selected, setSelected] = useState<FieldKey[]>([
     "codingHours",
@@ -74,12 +66,6 @@ export function TrendsCard() {
       icon={ChartSpline}
     >
       <div className="flex flex-wrap items-center gap-2">
-        <Segmented
-          aria-label="Date range"
-          options={RANGES}
-          value={range}
-          onValueChange={setRange}
-        />
         <CheckToggle checked={smooth} onCheckedChange={setSmooth}>
           7-day rolling mean
         </CheckToggle>

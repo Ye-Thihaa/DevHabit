@@ -2,6 +2,7 @@ import { Sun } from "lucide-react";
 import { useQuery } from "convex/react";
 
 import { Card } from "@/components/dashboard/card";
+import { cn } from "@/lib/utils";
 import { api } from "@convex/_generated/api";
 
 // HH:MM, digital-clock style rather than "1.8h" — matches the JetBrains Mono
@@ -15,6 +16,11 @@ function toClockFace(hours: number) {
 
 export function TodayCodingCard() {
   const snapshot = useQuery(api.analytics.getTodaySnapshot);
+
+  const hitReference =
+    snapshot != null &&
+    snapshot.codingHours !== null &&
+    snapshot.codingHours >= snapshot.referenceHours;
 
   return (
     <Card
@@ -45,10 +51,26 @@ export function TodayCodingCard() {
                   : "self-reported"}
             </p>
             <p className="mt-2 text-xs text-muted-foreground">
-              {snapshot.referenceIsPersonal
-                ? `vs. your ${snapshot.referenceHours.toFixed(1)}h/day average`
-                : `Not enough history for a personal average yet — shown against a ${snapshot.referenceHours}h reference.`}
+              {snapshot.referenceKind === "goal"
+                ? `vs. your ${snapshot.referenceHours.toFixed(1)}h/day goal`
+                : snapshot.referenceKind === "average"
+                  ? `vs. your ${snapshot.referenceHours.toFixed(1)}h/day average`
+                  : `Not enough history for a personal average yet — shown against a ${snapshot.referenceHours}h reference. Set a goal in Settings to compare against that instead.`}
             </p>
+
+            {snapshot.referenceKind !== "default" && (
+              <div className="mt-2 h-1.5 w-40 overflow-hidden rounded-full bg-muted">
+                <div
+                  className={cn(
+                    "h-full rounded-full transition-all",
+                    hitReference ? "bg-success" : "bg-primary",
+                  )}
+                  style={{
+                    width: `${Math.min(100, ((snapshot.codingHours ?? 0) / snapshot.referenceHours) * 100)}%`,
+                  }}
+                />
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -6,6 +6,7 @@ import { AlertCircle, CheckCircle2, Loader2, Timer, Trash2 } from "lucide-react"
 import { useEffect, useState } from "react";
 
 import { AppShell } from "@/components/app-shell";
+import { GoalsSection } from "@/components/goals-section";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -250,6 +251,8 @@ function SettingsPage() {
             .
           </p>
         </section>
+
+        <GoalsSection />
       </div>
     </AppShell>
   );

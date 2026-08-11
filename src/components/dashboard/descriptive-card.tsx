@@ -6,17 +6,16 @@ import { Card } from "@/components/dashboard/card";
 import { TechnicalDetails } from "@/components/dashboard/technical-details";
 import type { DescriptiveStats } from "@/lib/analytics-types";
 import { CheckToggle } from "@/components/ui/check-toggle";
-import { Segmented } from "@/components/ui/segmented";
 import { FIELD_BY_KEY } from "@/lib/fields";
 import { daysAgoStr } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 import { api } from "@convex/_generated/api";
 
-const RANGES = [
-  { value: 30, label: "30d" },
-  { value: 90, label: "90d" },
-  { value: 365, label: "1y" },
-] as const;
+function rangeLabel(days: number) {
+  if (days === 365) return "the last year";
+  if (days === 7) return "the last 7 days";
+  return `the last ${days} days`;
+}
 
 function fmt(value: number | null, unit?: string | null) {
   if (value === null) return "—";
@@ -24,8 +23,7 @@ function fmt(value: number | null, unit?: string | null) {
   return unit ? `${rounded}${unit}` : rounded;
 }
 
-export function DescriptiveCard() {
-  const [range, setRange] = useState<number>(90);
+export function DescriptiveCard({ range }: { range: number }) {
   const [includeSeeded, setIncludeSeeded] = useState(true);
 
   const stats: DescriptiveStats | undefined = useQuery(api.analytics.getDescriptiveStats, {
@@ -35,18 +33,14 @@ export function DescriptiveCard() {
   });
 
   return (
-    <Card title="Your averages" description="What a typical day looks like, per habit." icon={Sigma}>
-      <div className="flex flex-wrap items-center gap-3">
-        <Segmented
-          aria-label="Date range"
-          options={RANGES}
-          value={range}
-          onValueChange={setRange}
-        />
-        <CheckToggle checked={includeSeeded} onCheckedChange={setIncludeSeeded}>
-          Include seed data
-        </CheckToggle>
-      </div>
+    <Card
+      title="Your averages"
+      description={`What a typical day looks like, per habit — across ${rangeLabel(range)}.`}
+      icon={Sigma}
+    >
+      <CheckToggle checked={includeSeeded} onCheckedChange={setIncludeSeeded}>
+        Include seed data
+      </CheckToggle>
 
       {stats === undefined ? (
         <p className="mt-5 text-sm text-muted-foreground">Loading…</p>

@@ -38,6 +38,22 @@ export default defineSchema({
     // mislabels a Yangon developer's whole day by 6.5 hours: 20:00 local lands
     // in the "afternoon" bucket, so "when do you code" comes out backwards.
     timezoneOffsetMinutes: v.optional(v.number()),
+    // What the user is aiming for, per day. Kept on the user record rather
+    // than in a table of its own for the same reason wakatimeApiKey is: it's
+    // a handful of scalars with exactly one row per user, and history isn't
+    // wanted — a goal that changed last month would make every past day's
+    // "did I hit it" answer depend on when you asked.
+    //
+    // Each is optional and unset by default. Nothing in the analysis reads
+    // these; they only change what a card compares against, so an ambitious
+    // goal can never distort a statistic.
+    goals: v.optional(
+      v.object({
+        codingHours: v.optional(v.number()),
+        sleepHours: v.optional(v.number()),
+        commits: v.optional(v.number()),
+      }),
+    ),
   })
     .index("email", ["email"])
     .index("phone", ["phone"]),
