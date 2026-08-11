@@ -13,12 +13,19 @@ import {
 
 import { Card } from "@/components/dashboard/card";
 import type { DatasetRow, RollingRow } from "@/lib/analytics-types";
+import { CheckToggle } from "@/components/ui/check-toggle";
+import { Segmented } from "@/components/ui/segmented";
 import { FIELDS, type FieldKey } from "@/lib/fields";
 import { daysAgoStr } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 import { api } from "@convex/_generated/api";
 
-const RANGES = [7, 30, 90, 365] as const;
+const RANGES = [
+  { value: 7, label: "7d" },
+  { value: 30, label: "30d" },
+  { value: 90, label: "90d" },
+  { value: 365, label: "1y" },
+] as const;
 const COLORS = [
   "var(--color-chart-1)",
   "var(--color-chart-2)",
@@ -67,32 +74,15 @@ export function TrendsCard() {
       icon={ChartSpline}
     >
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex rounded-lg border border-border p-0.5">
-          {RANGES.map((r) => (
-            <button
-              key={r}
-              type="button"
-              onClick={() => setRange(r)}
-              className={cn(
-                "rounded-md px-3 py-1 font-mono text-xs transition-colors",
-                range === r
-                  ? "bg-accent text-accent-foreground"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {r === 365 ? "1y" : `${r}d`}
-            </button>
-          ))}
-        </div>
-        <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
-          <input
-            type="checkbox"
-            checked={smooth}
-            onChange={(e) => setSmooth(e.target.checked)}
-            className="size-3.5 accent-[var(--color-primary)]"
-          />
+        <Segmented
+          aria-label="Date range"
+          options={RANGES}
+          value={range}
+          onValueChange={setRange}
+        />
+        <CheckToggle checked={smooth} onCheckedChange={setSmooth}>
           7-day rolling mean
-        </label>
+        </CheckToggle>
         <span className="font-mono text-xs text-muted-foreground">
           {loading ? "Loading…" : `${raw?.length ?? 0} days with data`}
         </span>

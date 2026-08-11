@@ -9,7 +9,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AppNav } from "@/components/app-nav";
 import { DatePicker } from "@/components/date-picker";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { NumberStepper } from "@/components/ui/number-stepper";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -252,27 +252,16 @@ function DailyLog() {
             {numberFields.map((f) => (
               <div key={f.key} className="space-y-2">
                 <Label htmlFor={f.key}>{f.label}</Label>
-                <div className="relative">
-                  <Input
-                    id={f.key}
-                    type="number"
-                    inputMode="decimal"
-                    min={f.min}
-                    max={f.max}
-                    step={f.step}
-                    placeholder="0"
-                    aria-invalid={Boolean(errors[f.key])}
-                    value={values[f.key] ?? ""}
-                    onChange={(e) => set(f.key, e.target.value)}
-                    className={cn(
-                      "stat-num pr-16",
-                      errors[f.key] && "border-destructive focus-visible:ring-destructive/40",
-                    )}
-                  />
-                  <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center font-mono text-xs text-muted-foreground">
-                    {f.hint}
-                  </span>
-                </div>
+                <NumberStepper
+                  id={f.key}
+                  value={values[f.key] ?? ""}
+                  onValueChange={(v) => set(f.key, v)}
+                  min={f.min}
+                  max={f.max}
+                  step={Number(f.step ?? 1)}
+                  suffix={f.hint}
+                  invalid={Boolean(errors[f.key])}
+                />
                 <FieldError message={errors[f.key]} />
               </div>
             ))}

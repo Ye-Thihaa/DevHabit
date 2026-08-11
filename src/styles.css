@@ -155,6 +155,24 @@
   }
 }
 
+@layer base {
+  /* Every number field in the app ships its own −/+ buttons (see
+     components/ui/number-stepper.tsx), so the browser's built-in spinner
+     arrows are dead weight: they render differently per platform and steal
+     horizontal space from the value. Scroll-to-change is disabled with
+     them, which also stops a stray wheel event over a focused field from
+     silently editing a logged number. */
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button {
+    appearance: none;
+    margin: 0;
+  }
+
+  input[type="number"] {
+    appearance: textfield;
+  }
+}
+
 @utility stat-num {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;

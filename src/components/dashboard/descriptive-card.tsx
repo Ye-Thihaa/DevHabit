@@ -5,12 +5,18 @@ import { useQuery } from "convex/react";
 import { Card } from "@/components/dashboard/card";
 import { TechnicalDetails } from "@/components/dashboard/technical-details";
 import type { DescriptiveStats } from "@/lib/analytics-types";
+import { CheckToggle } from "@/components/ui/check-toggle";
+import { Segmented } from "@/components/ui/segmented";
 import { FIELD_BY_KEY } from "@/lib/fields";
 import { daysAgoStr } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 import { api } from "@convex/_generated/api";
 
-const RANGES = [30, 90, 365] as const;
+const RANGES = [
+  { value: 30, label: "30d" },
+  { value: 90, label: "90d" },
+  { value: 365, label: "1y" },
+] as const;
 
 function fmt(value: number | null, unit?: string | null) {
   if (value === null) return "—";
@@ -31,32 +37,15 @@ export function DescriptiveCard() {
   return (
     <Card title="Your averages" description="What a typical day looks like, per habit." icon={Sigma}>
       <div className="flex flex-wrap items-center gap-3">
-        <div className="flex rounded-lg border border-border p-0.5">
-          {RANGES.map((r) => (
-            <button
-              key={r}
-              type="button"
-              onClick={() => setRange(r)}
-              className={cn(
-                "rounded-md px-3 py-1 font-mono text-xs transition-colors",
-                range === r
-                  ? "bg-accent text-accent-foreground"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {r === 365 ? "1y" : `${r}d`}
-            </button>
-          ))}
-        </div>
-        <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
-          <input
-            type="checkbox"
-            checked={includeSeeded}
-            onChange={(e) => setIncludeSeeded(e.target.checked)}
-            className="size-3.5 accent-[var(--color-primary)]"
-          />
+        <Segmented
+          aria-label="Date range"
+          options={RANGES}
+          value={range}
+          onValueChange={setRange}
+        />
+        <CheckToggle checked={includeSeeded} onCheckedChange={setIncludeSeeded}>
           Include seed data
-        </label>
+        </CheckToggle>
       </div>
 
       {stats === undefined ? (
