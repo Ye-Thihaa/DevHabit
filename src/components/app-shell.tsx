@@ -1,10 +1,11 @@
 import { Menu } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { AppSidebar, type DashboardView } from "@/components/app-sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 // One layout for every signed-in page: a fixed sidebar rail on desktop, the
 // same nav in a sheet on mobile, and a sticky header that carries the page
@@ -20,6 +21,8 @@ type AppShellProps = {
   children: ReactNode;
 };
 
+const COLLAPSE_KEY = "devhabit:sidebar-collapsed";
+
 export function AppShell({
   title,
   description,
@@ -28,11 +31,36 @@ export function AppShell({
   children,
 }: AppShellProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  // Starts expanded on both server and client, then reads the saved choice
+  // after mount — reading localStorage in the initializer would render a
+  // different tree than the server sent and break hydration.
+  const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => {
+    setCollapsed(window.localStorage.getItem(COLLAPSE_KEY) === "1");
+  }, []);
+
+  const toggleCollapsed = () => {
+    setCollapsed((previous) => {
+      const next = !previous;
+      window.localStorage.setItem(COLLAPSE_KEY, next ? "1" : "0");
+      return next;
+    });
+  };
 
   return (
-    <div className="min-h-screen lg:grid lg:grid-cols-[248px_minmax(0,1fr)]">
+    <div
+      className={cn(
+        "min-h-screen lg:grid",
+        collapsed ? "lg:grid-cols-[72px_minmax(0,1fr)]" : "lg:grid-cols-[248px_minmax(0,1fr)]",
+      )}
+    >
       <aside className="sticky top-0 hidden h-screen border-r border-border bg-card/40 lg:block">
-        <AppSidebar activeView={activeView} />
+        <AppSidebar
+          activeView={activeView}
+          collapsed={collapsed}
+          onToggleCollapse={toggleCollapsed}
+        />
       </aside>
 
       <div className="flex min-w-0 flex-col">
