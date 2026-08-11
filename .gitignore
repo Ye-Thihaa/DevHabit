@@ -16,9 +16,9 @@ dist-ssr
 .nitro
 *.local
 
-# Wrangler / Cloudflare
-.wrangler/
-.dev.vars
+# Vercel — .vercel/output is the build artifact, .vercel/project.json is the
+# local link to your Vercel project. Neither belongs in the repo.
+.vercel
 
 # Editor directories and files
 .vscode/*

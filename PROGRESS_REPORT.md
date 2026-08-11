@@ -1,7 +1,7 @@
 # DevHabit — Progress Report
 
-_Date: 2026-08-10_
-_Branch: `feat/burnout-wakatime-tracking`_
+_Date: 2026-08-11_
+_Branch: `dev`_
 
 ## Summary
 
@@ -96,26 +96,96 @@ data quality, and burnout risk — on a Convex-backed dashboard.
   dismissible banner on the dashboard when risk is "high", reading the
   existing `getBurnoutRisk` query directly rather than a new alerts table.
   Dismissal is per-day via sessionStorage.
-- **Tests**: 33 total now (6 more for the burnout-history snapshot logic).
 - **Mobile responsiveness**: checked at 375px — nav, stat tiles, tabs, and
   card grids all reflow to a single column correctly.
+
+## Since then (2026-08-11)
+
+- **LLM provider fallback** ([convex/lib/llm.js](convex/lib/llm.js)): both AI
+  features (weekly summary, burnout assessment) each hard-coded an Anthropic
+  fetch. They now share one chain — **Anthropic → Groq → mock**. A billing or
+  quota rejection (401/402/429/5xx, or a failed request) moves to the next
+  provider; a refusal or an unparseable reply stops the chain, because that's
+  a real answer about the prompt rather than an outage. `GROQ_API_KEY` is set
+  on the deployment and confirmed generating real summaries. The burnout
+  **score** stays rule-based and never depends on an LLM.
+- **Default form controls replaced**: number fields used the browser's own
+  spinner arrows and checkboxes used `accent-color`, both of which render
+  differently per platform. Three components replace them app-wide —
+  [NumberStepper](src/components/ui/number-stepper.tsx) (−/+ buttons, native
+  spinners hidden in `styles.css`, which also stops a stray scroll from
+  editing a logged number), [CheckToggle](src/components/ui/check-toggle.tsx),
+  and [Segmented](src/components/ui/segmented.tsx).
+- **Correlations readability**: the card opened with an 880px grid of 100
+  r-values — that answers "what is the number for X and Y" while the reader
+  is still asking "what did you find". It now leads with the significant
+  pairs ranked strongest-first as sentences; the grid and every number behind
+  it moved under the existing disclosure.
+- **Sidebar shell** ([app-shell.tsx](src/components/app-shell.tsx),
+  [app-sidebar.tsx](src/components/app-sidebar.tsx)): the top nav carried
+  route links while the dashboard's views sat separately in a tab strip, so
+  "where am I" was split across two controls. Both now live in one left rail,
+  collapsible to a 72px icon rail (persisted in localStorage, read in an
+  effect so hydration doesn't break) and shown as a sheet under `lg`. The
+  dashboard views became `?view=` links, so the back button works and a view
+  can be linked to. `app-nav.tsx` is deleted.
+- **Logging streak** ([convex/streaks.js](convex/streaks.js),
+  [streak-card.tsx](src/components/dashboard/streak-card.tsx)): every other
+  statistic degrades quietly when logging stops, and nothing surfaced that
+  until a card went blank. Current/longest streak plus a 182-day heatmap.
+  Seeded rows never count. An unlogged *today* doesn't break the run (the day
+  hasn't ended); only a gap before yesterday does. Heatmap shades against the
+  90th-percentile day, not the maximum, so one crunch day doesn't flatten
+  everything else.
+- **CSV export** ([src/lib/csv.ts](src/lib/csv.ts),
+  [export-button.tsx](src/components/dashboard/export-button.tsx)): downloads
+  the joined dataset the statistics are computed from, so a spreadsheet
+  number can be checked against the dashboard. Values Excel would execute as
+  a formula are prefixed; a BOM keeps non-ASCII readable there; a blank cell
+  means no data rather than zero.
+- **Daily goals** ([goals-section.tsx](src/components/goals-section.tsx)):
+  optional per-day targets on the user record, next to the WakaTime key.
+  Nothing in the analysis reads them — they only change what the Today card
+  compares against, so an ambitious target can never bend a correlation. A
+  goal outranks the personal average once set.
+- **One shared date range**: Descriptive and Trends each owned a range
+  picker, so the two halves of the analytics view could silently disagree
+  about the window. One control in the header, carried in `?range=`.
+- **Deployment retargeted to Vercel**: `vite.config.ts` was a one-line
+  wrapper around `@lovable.dev/vite-tanstack-config`, which bundled the
+  plugins and defaulted Nitro to the **Cloudflare** preset with no way to
+  change it. The plugins are now spelled out and the preset is `vercel`
+  (overridable via `NITRO_PRESET`). The Lovable dependency, its `bunfig.toml`
+  entries, and the `@Lovable` Twitter meta tag are gone. New favicon
+  (`.ico` + `.svg`) matching the sidebar brand mark. See the README for the
+  deploy steps.
+- **Tests**: 70 total (33 → 70).
 
 ## Existing dashboard surface
 
 `src/components/dashboard/`: card, correlations-card, data-quality-card,
 descriptive-card, github-sync-card, lag-card, prediction-card, trends-card,
 weekly-summary-card, burnout-card, burnout-trend-card, wakatime-sync-card,
-technical-details, today-coding-card, alert-banner.
+technical-details, today-coding-card, alert-banner, streak-card,
+export-button.
 
 ## Open areas / not yet started
 
-Nothing outstanding from the original task split — [TASK_1](TASK_1_burnout_trends.md),
-[TASK_2](TASK_2_wakatime_settings.md), and [TASK_3](TASK_3_alerts_notifications.md)
-are all done (see each file for what shipped vs. what was originally
-scoped). Possible next work, none currently planned:
+[TASK_1](TASK_1_burnout_trends.md), [TASK_2](TASK_2_wakatime_settings.md) and
+[TASK_3](TASK_3_alerts_notifications.md) are all done. Possible next work,
+none currently planned:
 
-- Backfilling burnout history for dates before this feature shipped (not
-  possible — the underlying daily logs/commits still exist, so a one-time
-  backfill script could compute historical scores if wanted).
+- **Nothing in the 2026-08-11 batch has been verified in a browser.** It
+  typechecks, builds, and the tests pass, but the streak card, CSV download,
+  goals form, collapsible sidebar and header range picker have not been
+  clicked through by a signed-in user.
+- Backfilling burnout history for dates before that feature shipped — the
+  underlying logs/commits still exist, so a one-time script could compute
+  historical scores.
 - A "days connected" indicator so WakaTime/GitHub coverage gaps are more
-  visible at a glance than the existing Data Quality card already makes them.
+  visible at a glance.
+- The repo-wide CRLF lint failure (5000+ `prettier/prettier` errors from line
+  endings, present before any of this work) is still unaddressed; `npm run
+  lint` fails because of it.
+- Goals exist for sleep and commits but only the coding-hours goal is read by
+  a card so far.
