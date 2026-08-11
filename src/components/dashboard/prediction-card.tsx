@@ -6,7 +6,8 @@ import { Card } from "@/components/dashboard/card";
 import { TechnicalDetails } from "@/components/dashboard/technical-details";
 import type { PredictionResult } from "@/lib/analytics-types";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { NumberStepper } from "@/components/ui/number-stepper";
+import { Segmented } from "@/components/ui/segmented";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -18,7 +19,11 @@ import {
 import { FIELDS, fieldLabel, type FieldKey } from "@/lib/fields";
 import { api } from "@convex/_generated/api";
 
-const LAGS = [0, 1, 2] as const;
+const LAG_OPTIONS = [
+  { value: 0, label: "same day" },
+  { value: 1, label: "+1 day" },
+  { value: 2, label: "+2 days" },
+] as const;
 
 function formatValue(value: number) {
   return Math.abs(value) >= 20 ? value.toFixed(0) : value.toFixed(1);
@@ -67,16 +72,9 @@ export function PredictionCard() {
             </SelectContent>
           </Select>
         </div>
-        <div className="space-y-2 sm:w-28">
+        <div className="space-y-2 sm:w-36">
           <Label htmlFor="planned">Planned value</Label>
-          <Input
-            id="planned"
-            type="number"
-            step="0.5"
-            className="stat-num"
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-          />
+          <NumberStepper id="planned" value={value} onValueChange={setValue} step={0.5} min={0} />
         </div>
         <div className="space-y-2">
           <Label>Outcome</Label>
@@ -98,23 +96,12 @@ export function PredictionCard() {
       <div className="mt-4 flex flex-wrap items-end gap-3">
         <div className="space-y-2">
           <Label>Outcome measured</Label>
-          <div className="flex rounded-lg border border-border p-0.5">
-            {LAGS.map((l) => (
-              <button
-                key={l}
-                type="button"
-                onClick={() => setLag(l)}
-                className={
-                  "rounded-md px-3 py-1 font-mono text-xs transition-colors " +
-                  (lag === l
-                    ? "bg-accent text-accent-foreground"
-                    : "text-muted-foreground hover:text-foreground")
-                }
-              >
-                {l === 0 ? "same day" : `+${l} day${l > 1 ? "s" : ""}`}
-              </button>
-            ))}
-          </div>
+          <Segmented
+            aria-label="Outcome measured"
+            options={LAG_OPTIONS}
+            value={lag}
+            onValueChange={setLag}
+          />
         </div>
         <Button onClick={predict}>Predict</Button>
       </div>

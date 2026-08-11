@@ -5,7 +5,8 @@ import { ConvexError } from "convex/values";
 import { AlertCircle, CheckCircle2, Loader2, Timer, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { AppNav } from "@/components/app-nav";
+import { AppShell } from "@/components/app-shell";
+import { GoalsSection } from "@/components/goals-section";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -96,15 +97,9 @@ function SettingsPage() {
   }
 
   return (
-    <div className="min-h-screen">
-      <AppNav />
-      <main className="mx-auto max-w-2xl px-4 py-8 sm:py-12">
-        <h1 className="text-2xl font-semibold sm:text-3xl">Settings</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Manage the connections that feed your dashboard.
-        </p>
-
-        <section className="mt-6 rounded-2xl border border-border bg-card p-5 shadow-card sm:p-7">
+    <AppShell title="Settings" description="Manage the connections that feed your dashboard.">
+      <div className="max-w-2xl">
+        <section className="rounded-2xl border border-border bg-card p-5 shadow-card sm:p-7">
           <div className="flex items-start gap-3">
             <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-accent text-accent-foreground">
               <Timer className="size-4" />
@@ -256,7 +251,9 @@ function SettingsPage() {
             .
           </p>
         </section>
-      </main>
-    </div>
+
+        <GoalsSection />
+      </div>
+    </AppShell>
   );
 }

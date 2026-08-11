@@ -6,10 +6,10 @@ import { format } from "date-fns";
 import { AlertCircle, CheckCircle2, Github, Loader2, Timer } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-import { AppNav } from "@/components/app-nav";
+import { AppShell } from "@/components/app-shell";
 import { DatePicker } from "@/components/date-picker";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { NumberStepper } from "@/components/ui/number-stepper";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -200,16 +200,12 @@ function DailyLog() {
   }
 
   return (
-    <div className="min-h-screen">
-      <AppNav />
-      <main className="mx-auto max-w-3xl px-4 py-8 sm:py-12">
-        <h1 className="text-2xl font-semibold sm:text-3xl">Daily log</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Only the things GitHub can't see. Rough numbers are fine — consistency matters more than
-          precision.
-        </p>
-
-        <div className="mt-4 flex items-start gap-2 rounded-lg border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
+    <AppShell
+      title="Daily log"
+      description="Only the things GitHub can't see. Rough numbers are fine — consistency matters more than precision."
+    >
+      <div className="max-w-3xl">
+        <div className="flex items-start gap-2 rounded-lg border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
           <Github className="mt-0.5 size-4 shrink-0" />
           <p>
             Commits, pull requests, reviews and lines changed are pulled from the GitHub API on the
@@ -252,27 +248,16 @@ function DailyLog() {
             {numberFields.map((f) => (
               <div key={f.key} className="space-y-2">
                 <Label htmlFor={f.key}>{f.label}</Label>
-                <div className="relative">
-                  <Input
-                    id={f.key}
-                    type="number"
-                    inputMode="decimal"
-                    min={f.min}
-                    max={f.max}
-                    step={f.step}
-                    placeholder="0"
-                    aria-invalid={Boolean(errors[f.key])}
-                    value={values[f.key] ?? ""}
-                    onChange={(e) => set(f.key, e.target.value)}
-                    className={cn(
-                      "stat-num pr-16",
-                      errors[f.key] && "border-destructive focus-visible:ring-destructive/40",
-                    )}
-                  />
-                  <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center font-mono text-xs text-muted-foreground">
-                    {f.hint}
-                  </span>
-                </div>
+                <NumberStepper
+                  id={f.key}
+                  value={values[f.key] ?? ""}
+                  onValueChange={(v) => set(f.key, v)}
+                  min={f.min}
+                  max={f.max}
+                  step={Number(f.step ?? 1)}
+                  suffix={f.hint}
+                  invalid={Boolean(errors[f.key])}
+                />
                 <FieldError message={errors[f.key]} />
               </div>
             ))}
@@ -325,8 +310,8 @@ function DailyLog() {
             </Button>
           </div>
         </form>
-      </main>
-    </div>
+      </div>
+    </AppShell>
   );
 }
 

@@ -175,12 +175,23 @@ export const getTodaySnapshot = query({
     const personalAverage =
       referenceValues.length >= MIN_DAYS_FOR_PERSONAL_REFERENCE ? mean(referenceValues) : null;
 
+    // A goal the user set outranks their own average: once someone states
+    // what they're aiming for, "vs. what you usually do" stops being the
+    // question they're asking.
+    const user = await ctx.db.get(userId);
+    const goalHours = user?.goals?.codingHours ?? null;
+
+    const referenceKind = goalHours !== null ? "goal" : personalAverage !== null ? "average" : "default";
+
     return {
       date: today,
       codingHours,
       source,
-      referenceHours: personalAverage ?? DEFAULT_REFERENCE_HOURS,
-      referenceIsPersonal: personalAverage !== null,
+      referenceHours: goalHours ?? personalAverage ?? DEFAULT_REFERENCE_HOURS,
+      referenceKind,
+      // Kept for callers that only care whether the number is about this
+      // user rather than a flat fallback.
+      referenceIsPersonal: referenceKind !== "default",
     };
   },
 });

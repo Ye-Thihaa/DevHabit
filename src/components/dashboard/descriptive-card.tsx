@@ -5,12 +5,17 @@ import { useQuery } from "convex/react";
 import { Card } from "@/components/dashboard/card";
 import { TechnicalDetails } from "@/components/dashboard/technical-details";
 import type { DescriptiveStats } from "@/lib/analytics-types";
+import { CheckToggle } from "@/components/ui/check-toggle";
 import { FIELD_BY_KEY } from "@/lib/fields";
 import { daysAgoStr } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 import { api } from "@convex/_generated/api";
 
-const RANGES = [30, 90, 365] as const;
+function rangeLabel(days: number) {
+  if (days === 365) return "the last year";
+  if (days === 7) return "the last 7 days";
+  return `the last ${days} days`;
+}
 
 function fmt(value: number | null, unit?: string | null) {
   if (value === null) return "—";
@@ -18,8 +23,7 @@ function fmt(value: number | null, unit?: string | null) {
   return unit ? `${rounded}${unit}` : rounded;
 }
 
-export function DescriptiveCard() {
-  const [range, setRange] = useState<number>(90);
+export function DescriptiveCard({ range }: { range: number }) {
   const [includeSeeded, setIncludeSeeded] = useState(true);
 
   const stats: DescriptiveStats | undefined = useQuery(api.analytics.getDescriptiveStats, {
@@ -29,35 +33,14 @@ export function DescriptiveCard() {
   });
 
   return (
-    <Card title="Your averages" description="What a typical day looks like, per habit." icon={Sigma}>
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex rounded-lg border border-border p-0.5">
-          {RANGES.map((r) => (
-            <button
-              key={r}
-              type="button"
-              onClick={() => setRange(r)}
-              className={cn(
-                "rounded-md px-3 py-1 font-mono text-xs transition-colors",
-                range === r
-                  ? "bg-accent text-accent-foreground"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {r === 365 ? "1y" : `${r}d`}
-            </button>
-          ))}
-        </div>
-        <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
-          <input
-            type="checkbox"
-            checked={includeSeeded}
-            onChange={(e) => setIncludeSeeded(e.target.checked)}
-            className="size-3.5 accent-[var(--color-primary)]"
-          />
-          Include seed data
-        </label>
-      </div>
+    <Card
+      title="Your averages"
+      description={`What a typical day looks like, per habit — across ${rangeLabel(range)}.`}
+      icon={Sigma}
+    >
+      <CheckToggle checked={includeSeeded} onCheckedChange={setIncludeSeeded}>
+        Include seed data
+      </CheckToggle>
 
       {stats === undefined ? (
         <p className="mt-5 text-sm text-muted-foreground">Loading…</p>
