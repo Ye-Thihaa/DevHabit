@@ -64,15 +64,35 @@ token, separate from OAuth login ([convex/github.js](convex/github.js)).
 npx convex env set GITHUB_TOKEN <token>
 ```
 
-## 5. Optional: AI-generated weekly summaries
+## 5. Optional: AI text (weekly summaries, burnout assessment)
 
-[convex/weeklySummary.js](convex/weeklySummary.js) uses the Anthropic API if
-configured. Without this, the weekly summary card simply won't generate
-text.
+Two features generate text with an LLM: the weekly summary
+([convex/weeklySummary.js](convex/weeklySummary.js)) and the plain-language
+burnout assessment ([convex/burnout.js](convex/burnout.js)). Both go through
+one provider chain in [convex/lib/llm.js](convex/lib/llm.js):
+
+**Anthropic → Groq → mock text.**
+
+Set either key, both, or neither:
 
 ```bash
 npx convex env set ANTHROPIC_API_KEY <key>
 ```
+
+```bash
+npx convex env set GROQ_API_KEY <key>
+```
+
+- Both set: Anthropic is used, and Groq covers it automatically if Anthropic
+  is out of credit, rate-limited, or unreachable (401/402/429/5xx or a failed
+  request). A refusal or an unparseable reply is a real answer, so it stops
+  there rather than retrying elsewhere.
+- Only `GROQ_API_KEY`: Groq is used directly. Get a free key at
+  https://console.groq.com/keys. Defaults to `llama-3.3-70b-versatile`;
+  override with `npx convex env set GROQ_MODEL <model>`.
+- Neither: both features return clearly-labelled mock text instead of
+  failing. The burnout **score** is rule-based and never depends on an LLM —
+  only its narration does.
 
 ## 6. WakaTime sync (per-user, no setup needed here)
 

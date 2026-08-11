@@ -4,8 +4,7 @@ import { api } from "./_generated/api";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { mean, shiftDateString } from "./lib/stats.js";
 import { MIN_DAYS_FOR_BURNOUT } from "./lib/thresholds.js";
-
-const ASSESSMENT_MODEL = "claude-opus-5";
+import { generateText } from "./lib/llm.js";
 
 // A rule-based burnout risk score, not a trained model — there's no labeled
 // "was this person burned out" outcome anywhere in the dataset to train
@@ -285,7 +284,8 @@ function buildMockAssessment(rule) {
         : rule.level === "moderate"
           ? "A few signals are drifting in a burnout-shaped direction."
           : "Several signals together point toward burnout risk right now.",
-    reasoning: "[Mock assessment — set ANTHROPIC_API_KEY on this deployment for a real one.]",
+    reasoning:
+      "[Mock assessment — set ANTHROPIC_API_KEY or GROQ_API_KEY on this deployment for a real one.]",
     suggestions: [],
   };
   return { ...rule, ...base };
@@ -312,45 +312,21 @@ export const getBurnoutAssessment = action({
       return { ...rule, headline: null, reasoning: null, suggestions: [] };
     }
 
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) {
+    const result = await generateText({
+      prompt: buildAssessmentPrompt(rule),
+      maxTokens: 512,
+      label: "assess this data",
+    });
+    if (!result) {
       return buildMockAssessment(rule);
     }
 
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        model: ASSESSMENT_MODEL,
-        max_tokens: 512,
-        output_config: { effort: "low" },
-        messages: [{ role: "user", content: buildAssessmentPrompt(rule) }],
-      }),
-    });
-
-    if (!response.ok) {
-      const text = await response.text();
-      throw new ConvexError(`Claude API error (${response.status}): ${text.slice(0, 300)}`);
-    }
-
-    const data = await response.json();
-    if (data.stop_reason === "refusal") {
-      throw new ConvexError("Claude declined to assess this data.");
-    }
-
-    const textBlock = data.content.find((block) => block.type === "text");
-    if (!textBlock) {
-      throw new ConvexError("Claude returned no text content.");
-    }
-
     try {
-      return { ...rule, ...parseAssessmentJson(textBlock.text) };
+      return { ...rule, ...parseAssessmentJson(result.text) };
     } catch {
-      throw new ConvexError("Claude's response could not be parsed as an assessment.");
+      throw new ConvexError(
+        `The ${result.provider} response could not be parsed as an assessment.`,
+      );
     }
   },
 });
