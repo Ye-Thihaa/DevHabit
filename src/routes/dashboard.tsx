@@ -18,6 +18,7 @@ import { LanguageCard } from "@/components/dashboard/language-card";
 import { ProductivityCard } from "@/components/dashboard/productivity-card";
 import { RepoProfileCard } from "@/components/dashboard/repo-profile-card";
 import { GithubSyncCard } from "@/components/dashboard/github-sync-card";
+import { LeetcodeSyncCard } from "@/components/dashboard/leetcode-sync-card";
 import { LagCard } from "@/components/dashboard/lag-card";
 import { PredictionCard } from "@/components/dashboard/prediction-card";
 import { StreakCard } from "@/components/dashboard/streak-card";
@@ -166,7 +167,7 @@ function Dashboard() {
       : view === "profile"
         ? [<LanguageCard />, <ProductivityCard />, <ExperienceCard />, <RepoProfileCard />]
         : view === "sync"
-          ? [<GithubSyncCard />, <WakatimeSyncCard />]
+          ? [<GithubSyncCard />, <WakatimeSyncCard />, <LeetcodeSyncCard />]
         : [
             <DataQualityCard />,
             <DescriptiveCard range={range} />,

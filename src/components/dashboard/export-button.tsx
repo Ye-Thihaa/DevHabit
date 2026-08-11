@@ -16,9 +16,11 @@ const COLUMNS = [
   { key: "date", header: "date" },
   ...FIELDS.map((f) => ({ key: f.key, header: f.key })),
   { key: "codingHoursSource", header: "codingHoursSource" },
+  { key: "problemsSolvedSource", header: "problemsSolvedSource" },
   { key: "hasSelfReported", header: "hasSelfReported" },
   { key: "hasGithub", header: "hasGithub" },
   { key: "hasWakatime", header: "hasWakatime" },
+  { key: "hasLeetcode", header: "hasLeetcode" },
   { key: "isSeeded", header: "isSeeded" },
 ] as const;
 

@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 
 import { AppShell } from "@/components/app-shell";
 import { GoalsSection } from "@/components/goals-section";
+import { LeetcodeSection } from "@/components/leetcode-section";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -251,6 +252,8 @@ function SettingsPage() {
             .
           </p>
         </section>
+
+        <LeetcodeSection />
 
         <GoalsSection />
       </div>

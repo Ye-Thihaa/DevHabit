@@ -1,6 +1,6 @@
 # DevHabit — Progress Report
 
-_Date: 2026-08-11_
+_Date: 2026-08-12_
 _Branch: `dev`_
 
 ## Summary
@@ -161,13 +161,34 @@ data quality, and burnout risk — on a Convex-backed dashboard.
   deploy steps.
 - **Tests**: 70 total (33 → 70).
 
+## Since then (2026-08-12)
+
+- **LeetCode sync** ([convex/leetcode.js](convex/leetcode.js)): `problemsSolved`
+  moves from self-reported to measured, the same shift WakaTime made for
+  `codingHours`. Per-user public username (`users.leetcodeUsername`, no key —
+  the profile data is public), settings section, dashboard sync card, and a
+  daily cron alongside the burnout snapshot.
+  **The one real limitation**: LeetCode publishes no per-day history of solved
+  problems, only running totals. Every daily figure here comes from
+  snapshotting the totals once a day and differencing consecutive snapshots —
+  which means nothing can be back-filled, the first-ever snapshot has no delta
+  at all (never a fabricated 0), and a missed day produces one delta spanning
+  the gap, flagged with `daysSincePrevious` so it's never mistaken for a single
+  day's work and never summed into a window total as if it were.
+  `analytics.buildDataset` prefers LeetCode's figure only when that day's
+  snapshot differenced cleanly (`daysSincePrevious === 1`); otherwise it falls
+  back to self-reported, exactly like a WakaTime zero does.
+  `dailyLogs.problemsSolved` is now optional and the daily-log form stops
+  asking for it once connected, same as `codingHours` for WakaTime.
+- **Tests**: 104 total (70 → 104).
+
 ## Existing dashboard surface
 
 `src/components/dashboard/`: card, correlations-card, data-quality-card,
 descriptive-card, github-sync-card, lag-card, prediction-card, trends-card,
 weekly-summary-card, burnout-card, burnout-trend-card, wakatime-sync-card,
-technical-details, today-coding-card, alert-banner, streak-card,
-export-button.
+leetcode-sync-card, technical-details, today-coding-card, alert-banner,
+streak-card, export-button.
 
 ## Open areas / not yet started
 
@@ -175,17 +196,23 @@ export-button.
 [TASK_3](TASK_3_alerts_notifications.md) are all done. Possible next work,
 none currently planned:
 
-- **Nothing in the 2026-08-11 batch has been verified in a browser.** It
-  typechecks, builds, and the tests pass, but the streak card, CSV download,
-  goals form, collapsible sidebar and header range picker have not been
-  clicked through by a signed-in user.
+- **Nothing in the 2026-08-11 or 2026-08-12 batches has been verified in a
+  browser by a signed-in user.** Both typecheck, build, and pass their tests,
+  but the streak card, CSV download, goals form, collapsible sidebar, header
+  range picker, and now the LeetCode settings/sync flow have only been
+  exercised by unit tests and an unauthenticated console check.
 - Backfilling burnout history for dates before that feature shipped — the
   underlying logs/commits still exist, so a one-time script could compute
   historical scores.
-- A "days connected" indicator so WakaTime/GitHub coverage gaps are more
-  visible at a glance.
+- A "days connected" indicator so WakaTime/GitHub/LeetCode coverage gaps are
+  more visible at a glance.
 - The repo-wide CRLF lint failure (5000+ `prettier/prettier` errors from line
   endings, present before any of this work) is still unaddressed; `npm run
   lint` fails because of it.
 - Goals exist for sleep and commits but only the coding-hours goal is read by
   a card so far.
+- LeetCode's profile GraphQL endpoint is unofficial — no key, no login, but it
+  can change shape or rate-limit without notice. Every failure is caught and
+  recorded in `syncRuns` rather than thrown from the cron, but a schema change
+  on LeetCode's side would surface as a silent-looking sync failure until
+  someone checks the sync-run history.
