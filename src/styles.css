@@ -171,6 +171,52 @@
   input[type="number"] {
     appearance: textfield;
   }
+
+  /* The last default control left in the app. The platform scrollbar on the
+     wide tables (correlation matrix, the descriptive breakdown, the field
+     table on /about) renders as a chunky light-grey bar with stepper arrows
+     on Windows — it ignores the theme entirely and reads as part of the OS
+     rather than part of the card.
+
+     Firefox only exposes width and colour, so the two blocks below are not
+     duplicates: `scrollbar-*` covers Firefox, `::-webkit-scrollbar` covers
+     Chromium and Safari. The arrow buttons are removed outright; a track
+     that short doesn't need stepping. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border) transparent;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--color-border);
+    border-radius: 9999px;
+    /* Inset via a transparent border so the thumb reads as floating in the
+       track rather than filling it edge to edge. */
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--color-muted-foreground);
+    background-clip: padding-box;
+  }
+
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-button {
+    display: none;
+  }
 }
 
 @utility stat-num {
