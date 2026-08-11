@@ -20,6 +20,11 @@ dist-ssr
 # local link to your Vercel project. Neither belongs in the repo.
 .vercel
 
+# Leftover from the old Cloudflare preset. The build no longer writes here,
+# but an existing working copy still has the directory.
+.wrangler/
+.dev.vars
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
