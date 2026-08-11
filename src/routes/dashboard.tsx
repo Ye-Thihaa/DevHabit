@@ -15,6 +15,7 @@ import { DescriptiveCard } from "@/components/dashboard/descriptive-card";
 import { GithubSyncCard } from "@/components/dashboard/github-sync-card";
 import { LagCard } from "@/components/dashboard/lag-card";
 import { PredictionCard } from "@/components/dashboard/prediction-card";
+import { StreakCard } from "@/components/dashboard/streak-card";
 import { TodayCodingCard } from "@/components/dashboard/today-coding-card";
 import { TrendsCard } from "@/components/dashboard/trends-card";
 import { WakatimeSyncCard } from "@/components/dashboard/wakatime-sync-card";
@@ -125,7 +126,13 @@ function Dashboard() {
   // the tabs used to when their content mounted.
   const cards: ReactNode[] =
     view === "overview"
-      ? [<TodayCodingCard />, <BurnoutCard />, <BurnoutTrendCard />, <WeeklySummaryCard />]
+      ? [
+          <TodayCodingCard />,
+          <StreakCard />,
+          <BurnoutCard />,
+          <BurnoutTrendCard />,
+          <WeeklySummaryCard />,
+        ]
       : view === "sync"
         ? [<GithubSyncCard />, <WakatimeSyncCard />]
         : [

@@ -25,6 +25,7 @@ import type * as maintenance from "../maintenance.js";
 import type * as migrations from "../migrations.js";
 import type * as predictions from "../predictions.js";
 import type * as seed from "../seed.js";
+import type * as streaks from "../streaks.js";
 import type * as users from "../users.js";
 import type * as wakatime from "../wakatime.js";
 import type * as weeklySummary from "../weeklySummary.js";
@@ -53,6 +54,7 @@ declare const fullApi: ApiFromModules<{
   migrations: typeof migrations;
   predictions: typeof predictions;
   seed: typeof seed;
+  streaks: typeof streaks;
   users: typeof users;
   wakatime: typeof wakatime;
   weeklySummary: typeof weeklySummary;
