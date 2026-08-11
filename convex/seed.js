@@ -1,4 +1,4 @@
-import { mutation } from "./_generated/server";
+import { mutation, query } from "./_generated/server";
 import { v, ConvexError } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { dateRange, shiftDateString } from "./lib/stats.js";
@@ -49,6 +49,38 @@ function clamp(value, min, max) {
 
 const round = (value, dp = 1) => Number(value.toFixed(dp));
 
+// Seeding is a development affordance, not a product feature. On a production
+// deployment there is no legitimate reason to write fabricated days into a real
+// account, so the whole facility is opt-in per deployment:
+//
+//   npx convex env set ALLOW_SEED_DATA true      # dev only, never --prod
+//
+// Enforced here rather than only in the UI, because hiding a button does not
+// remove the mutation — it stays callable from the browser console by anyone
+// who opens devtools. The query below lets the dashboard hide the controls;
+// the guard is what actually stops the write.
+//
+// Seeded rows that somehow reach production are still removable, just not from
+// the client — see maintenance.clearSeededLogs.
+function seedingEnabled() {
+  return process.env.ALLOW_SEED_DATA === "true";
+}
+
+function requireSeedingEnabled() {
+  if (!seedingEnabled()) {
+    throw new ConvexError(
+      "Seed data is disabled on this deployment. It is a development-only " +
+        "facility; set ALLOW_SEED_DATA=true on a dev deployment to use it.",
+    );
+  }
+}
+
+// Drives whether the dashboard renders the seed controls at all.
+export const isSeedingEnabled = query({
+  args: {},
+  handler: async () => seedingEnabled(),
+});
+
 export const generateSeedData = mutation({
   args: {
     days: v.optional(v.number()),
@@ -63,6 +95,7 @@ export const generateSeedData = mutation({
     linkToGithub: v.optional(v.boolean()),
   },
   handler: async (ctx, { days = 90, seed = 42, overwriteReal = false, linkToGithub = true }) => {
+    requireSeedingEnabled();
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new ConvexError("Not signed in");
 
@@ -180,6 +213,7 @@ export const generateSeedData = mutation({
 export const clearSeedData = mutation({
   args: {},
   handler: async (ctx) => {
+    requireSeedingEnabled();
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new ConvexError("Not signed in");
 

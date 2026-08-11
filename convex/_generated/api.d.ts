@@ -24,6 +24,7 @@ import type * as lib_thresholds from "../lib/thresholds.js";
 import type * as maintenance from "../maintenance.js";
 import type * as migrations from "../migrations.js";
 import type * as predictions from "../predictions.js";
+import type * as profile from "../profile.js";
 import type * as seed from "../seed.js";
 import type * as streaks from "../streaks.js";
 import type * as users from "../users.js";
@@ -53,6 +54,7 @@ declare const fullApi: ApiFromModules<{
   maintenance: typeof maintenance;
   migrations: typeof migrations;
   predictions: typeof predictions;
+  profile: typeof profile;
   seed: typeof seed;
   streaks: typeof streaks;
   users: typeof users;

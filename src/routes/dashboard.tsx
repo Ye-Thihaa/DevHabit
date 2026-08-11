@@ -12,7 +12,11 @@ import { BurnoutTrendCard } from "@/components/dashboard/burnout-trend-card";
 import { CorrelationsCard } from "@/components/dashboard/correlations-card";
 import { DataQualityCard } from "@/components/dashboard/data-quality-card";
 import { DescriptiveCard } from "@/components/dashboard/descriptive-card";
+import { ExperienceCard } from "@/components/dashboard/experience-card";
 import { ExportButton } from "@/components/dashboard/export-button";
+import { LanguageCard } from "@/components/dashboard/language-card";
+import { ProductivityCard } from "@/components/dashboard/productivity-card";
+import { RepoProfileCard } from "@/components/dashboard/repo-profile-card";
 import { GithubSyncCard } from "@/components/dashboard/github-sync-card";
 import { LagCard } from "@/components/dashboard/lag-card";
 import { PredictionCard } from "@/components/dashboard/prediction-card";
@@ -39,7 +43,7 @@ function Reveal({ index, children }: { index: number; children: ReactNode }) {
   );
 }
 
-const VIEWS: DashboardView[] = ["overview", "analytics", "sync"];
+const VIEWS: DashboardView[] = ["overview", "profile", "analytics", "sync"];
 
 // Descriptive and Trends each carried their own range picker, so the two
 // halves of the analytics view could silently disagree about which window
@@ -59,6 +63,11 @@ const VIEW_META: Record<DashboardView, { title: string; description: string }> =
     title: "Overview",
     description:
       "Where this week is heading — today's coding time, burnout risk and a plain-language read on the last seven days.",
+  },
+  profile: {
+    title: "Developer profile",
+    description:
+      "What the measured data says about how you work — the languages you spend time in, what your repositories are, and how this fortnight compares to the last. Descriptive only: nothing here rates your ability.",
   },
   analytics: {
     title: "Analytics",
@@ -154,8 +163,10 @@ function Dashboard() {
           <BurnoutTrendCard />,
           <WeeklySummaryCard />,
         ]
-      : view === "sync"
-        ? [<GithubSyncCard />, <WakatimeSyncCard />]
+      : view === "profile"
+        ? [<LanguageCard />, <ProductivityCard />, <ExperienceCard />, <RepoProfileCard />]
+        : view === "sync"
+          ? [<GithubSyncCard />, <WakatimeSyncCard />]
         : [
             <DataQualityCard />,
             <DescriptiveCard range={range} />,
