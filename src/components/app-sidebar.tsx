@@ -4,6 +4,7 @@ import { useAuthActions } from "@convex-dev/auth/react";
 import {
   Activity,
   BarChart3,
+  BookOpen,
   LayoutDashboard,
   LogOut,
   PanelLeftClose,
@@ -12,6 +13,7 @@ import {
   RefreshCw,
   Settings,
   Terminal,
+  UserRound,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -23,12 +25,12 @@ import { api } from "@convex/_generated/api";
 // sidebar entries they read as places you go rather than a control you
 // operate, which is what the reference layouts do — and because they are
 // links carrying ?view=, the back button and a pasted URL both work.
-export type DashboardView = "overview" | "analytics" | "sync";
+export type DashboardView = "overview" | "profile" | "analytics" | "sync";
 
 type NavItem = {
   label: string;
   icon: LucideIcon;
-  to: "/dashboard" | "/log" | "/settings";
+  to: "/dashboard" | "/log" | "/settings" | "/about";
   view?: DashboardView;
 };
 
@@ -37,6 +39,7 @@ const SECTIONS: { heading: string; items: NavItem[] }[] = [
     heading: "Dashboard",
     items: [
       { label: "Overview", icon: LayoutDashboard, to: "/dashboard", view: "overview" },
+      { label: "Developer profile", icon: UserRound, to: "/dashboard", view: "profile" },
       { label: "Analytics", icon: BarChart3, to: "/dashboard", view: "analytics" },
       { label: "Sync", icon: RefreshCw, to: "/dashboard", view: "sync" },
     ],
@@ -46,6 +49,7 @@ const SECTIONS: { heading: string; items: NavItem[] }[] = [
     items: [
       { label: "Daily log", icon: PenLine, to: "/log" },
       { label: "Settings", icon: Settings, to: "/settings" },
+      { label: "What's measured", icon: BookOpen, to: "/about" },
     ],
   },
 ];

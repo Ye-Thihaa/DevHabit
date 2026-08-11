@@ -156,6 +156,30 @@ export default defineSchema({
     .index("by_user_and_date", ["userId", "date"])
     .index("by_user", ["userId"]),
 
+  // LAYER 1d — measured. Repository metadata from the GitHub API, written only
+  // by convex/github.js. Unlike the other measured tables this is not per-day:
+  // it's a snapshot of what the developer's repos currently look like, used to
+  // describe *what* they build rather than *how much*.
+  //
+  // Everything here is GitHub's own classification (its detected primary
+  // language, the topics the owner set), not something this app inferred.
+  githubRepos: defineTable({
+    userId: v.id("users"),
+    fullName: v.string(), // "owner/repo"
+    description: v.optional(v.string()),
+    // GitHub's own primary-language detection, by bytes of code.
+    primaryLanguage: v.optional(v.string()),
+    topics: v.array(v.string()),
+    stars: v.number(),
+    isFork: v.boolean(),
+    isPrivate: v.boolean(),
+    pushedAt: v.optional(v.string()),
+    createdAt: v.optional(v.string()),
+    fetchedAt: v.number(),
+  })
+    .index("by_user_and_name", ["userId", "fullName"])
+    .index("by_user", ["userId"]),
+
   // LAYER 2 — ingestion audit. Every backfill/sync appends one row, including
   // failures, so the dataset's coverage is explainable after the fact.
   syncRuns: defineTable({
@@ -165,6 +189,7 @@ export default defineSchema({
       v.literal("detailed"),
       v.literal("migration"),
       v.literal("wakatime"),
+      v.literal("repos"),
     ),
     startDate: v.string(),
     endDate: v.string(),

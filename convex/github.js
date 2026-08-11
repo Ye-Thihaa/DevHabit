@@ -39,6 +39,127 @@ function requireToken() {
   return token;
 }
 
+// One page of repos is enough to characterise what someone builds; paging
+// further mostly turns up old forks.
+const MAX_REPOS_PER_PROFILE_SYNC = 100;
+
+// A snapshot of what the developer's repositories are, as opposed to how much
+// they committed. Stores GitHub's own primary-language detection and the
+// owner-set topics — this app classifies nothing here, it only records.
+//
+// Forks are kept but flagged, because "has 40 forks" and "wrote 40 repos" are
+// very different claims and the reader should be able to tell them apart.
+export const syncRepoProfile = action({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new ConvexError("Not signed in");
+    }
+    const token = requireToken();
+
+    let repos;
+    try {
+      const response = await fetch(
+        `${GITHUB_REST}/user/repos?per_page=${MAX_REPOS_PER_PROFILE_SYNC}&sort=pushed&affiliation=owner,collaborator`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            // Topics need this preview-era Accept header on some endpoints.
+            Accept: "application/vnd.github.mercy-preview+json",
+          },
+        },
+      );
+      if (!response.ok) {
+        const text = await response.text();
+        throw new ConvexError(`GitHub REST error (${response.status}): ${text.slice(0, 300)}`);
+      }
+      repos = await response.json();
+    } catch (err) {
+      const message = err instanceof ConvexError ? err.data : `Repo sync failed: ${err.message}`;
+      await ctx.runMutation(internal.github.recordRepoSync, {
+        userId,
+        written: 0,
+        status: "error",
+        message: String(message).slice(0, 300),
+      });
+      throw err instanceof ConvexError ? err : new ConvexError(message);
+    }
+
+    const rows = repos.map((repo) => ({
+      fullName: repo.full_name,
+      description: repo.description ?? undefined,
+      primaryLanguage: repo.language ?? undefined,
+      topics: Array.isArray(repo.topics) ? repo.topics : [],
+      stars: repo.stargazers_count ?? 0,
+      isFork: repo.fork === true,
+      isPrivate: repo.private === true,
+      pushedAt: repo.pushed_at ?? undefined,
+      createdAt: repo.created_at ?? undefined,
+    }));
+
+    const written = await ctx.runMutation(internal.github.writeRepoProfile, { userId, rows });
+    await ctx.runMutation(internal.github.recordRepoSync, { userId, written, status: "ok" });
+    return { written };
+  },
+});
+
+export const writeRepoProfile = internalMutation({
+  args: {
+    userId: v.id("users"),
+    rows: v.array(
+      v.object({
+        fullName: v.string(),
+        description: v.optional(v.string()),
+        primaryLanguage: v.optional(v.string()),
+        topics: v.array(v.string()),
+        stars: v.number(),
+        isFork: v.boolean(),
+        isPrivate: v.boolean(),
+        pushedAt: v.optional(v.string()),
+        createdAt: v.optional(v.string()),
+      }),
+    ),
+  },
+  handler: async (ctx, { userId, rows }) => {
+    const fetchedAt = Date.now();
+    for (const row of rows) {
+      const existing = await ctx.db
+        .query("githubRepos")
+        .withIndex("by_user_and_name", (q) => q.eq("userId", userId).eq("fullName", row.fullName))
+        .unique();
+      if (existing) {
+        await ctx.db.patch(existing._id, { ...row, fetchedAt });
+      } else {
+        await ctx.db.insert("githubRepos", { userId, ...row, fetchedAt });
+      }
+    }
+    return rows.length;
+  },
+});
+
+export const recordRepoSync = internalMutation({
+  args: {
+    userId: v.id("users"),
+    written: v.number(),
+    status: v.union(v.literal("ok"), v.literal("error")),
+    message: v.optional(v.string()),
+  },
+  handler: async (ctx, { userId, written, status, message }) => {
+    const today = new Date().toISOString().slice(0, 10);
+    await ctx.db.insert("syncRuns", {
+      userId,
+      kind: "repos",
+      startDate: today,
+      endDate: today,
+      daysWritten: written,
+      status,
+      ...(message ? { message } : {}),
+      ranAt: Date.now(),
+    });
+  },
+});
+
 function bucketForHour(hour) {
   if (hour < 6) return "night";
   if (hour < 12) return "morning";
