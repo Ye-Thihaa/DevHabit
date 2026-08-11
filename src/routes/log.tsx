@@ -6,7 +6,7 @@ import { format } from "date-fns";
 import { AlertCircle, CheckCircle2, Github, Loader2, Timer } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-import { AppNav } from "@/components/app-nav";
+import { AppShell } from "@/components/app-shell";
 import { DatePicker } from "@/components/date-picker";
 import { Button } from "@/components/ui/button";
 import { NumberStepper } from "@/components/ui/number-stepper";
@@ -200,16 +200,12 @@ function DailyLog() {
   }
 
   return (
-    <div className="min-h-screen">
-      <AppNav />
-      <main className="mx-auto max-w-3xl px-4 py-8 sm:py-12">
-        <h1 className="text-2xl font-semibold sm:text-3xl">Daily log</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Only the things GitHub can't see. Rough numbers are fine — consistency matters more than
-          precision.
-        </p>
-
-        <div className="mt-4 flex items-start gap-2 rounded-lg border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
+    <AppShell
+      title="Daily log"
+      description="Only the things GitHub can't see. Rough numbers are fine — consistency matters more than precision."
+    >
+      <div className="max-w-3xl">
+        <div className="flex items-start gap-2 rounded-lg border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
           <Github className="mt-0.5 size-4 shrink-0" />
           <p>
             Commits, pull requests, reviews and lines changed are pulled from the GitHub API on the
@@ -314,8 +310,8 @@ function DailyLog() {
             </Button>
           </div>
         </form>
-      </main>
-    </div>
+      </div>
+    </AppShell>
   );
 }
 
