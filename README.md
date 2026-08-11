@@ -1,82 +1,226 @@
-# Habit Track
+# DevHabit
 
-Build the frontend UI for a "Coding Habits & Productivity Tracker" — a web app where a developer logs daily habits and sees how they relate to their coding output. This is a UI-only build: use mock/placeholder data everywhere, don't set up Supabase or any backend — I already have a working backend I'll connect afterward. The login screen should also be UI-only (no real authentication logic) — I'll wire it up separately.
+Tracks developer coding habits — commits (GitHub), time spent (WakaTime), and
+self-reported daily logs — and surfaces descriptive stats, correlations,
+predictions, data-quality reporting, and a burnout risk score on a dashboard.
 
-Four views total:
+Stack: TanStack Start (React) frontend + Convex (backend/DB/auth), GitHub
+OAuth login via `@convex-dev/auth`.
 
-## 1. Landing page
+## Prerequisites
 
-This is the first thing visitors see. Hero section with the app name, a short one-line tagline (e.g. "Track your coding habits. See what actually moves the needle."), a brief description, and a primary "Get Started" / "Log In" button. Below the hero, a features section with short cards highlighting: daily habit logging, GitHub commit sync, AI-generated weekly summaries, correlation analysis, and simple predictions. Clean footer. This page should feel like a real product marketing page, not a placeholder.
+- Node.js 20+
+- A [Convex](https://convex.dev) account (free tier is fine)
+- A GitHub account to create an OAuth App and a personal access token
 
-## 2. Login page
+## 1. Install dependencies
 
-A centered card with: email + password fields, a "Sign In" button, a divider ("or"), and a "Continue with GitHub" button (with the GitHub icon). Include a small "Don't have an account? Sign up" link (can go nowhere / same page). None of this needs to actually authenticate anything — it's UI only, but should look and feel like a real, polished auth screen. On submit, just navigate into the app.
+```bash
+npm install
+```
 
-## 3. Daily Log page
+## 2. Set up Convex
 
-A form to record one day's entry, with these fields:
+This project uses Convex for the database, server functions, and auth. Log
+in and create/link a deployment:
 
-- Date (date picker, defaults to today)
+```bash
+npx convex dev
+```
 
-- Coding Hours (number)
+The first run will prompt you to log in and either create a new Convex
+project or link to an existing one. Leave this command running in a terminal
+— it watches `convex/` and pushes your functions/schema live, and it writes
+`.env.local` with `CONVEX_URL`/`CONVEX_DEPLOYMENT` for the frontend to use.
 
-- Sleep Hours (number)
+## 3. Configure GitHub OAuth login
 
-- Coffee Intake, in cups (number)
+Auth is handled by `@convex-dev/auth` with GitHub as the only provider
+([convex/auth.ts](convex/auth.ts)).
 
-- GitHub Commits (number)
+1. Create a GitHub OAuth App: https://github.com/settings/developers →
+   "New OAuth App".
+   - Homepage URL: `http://localhost:8080`
+   - Authorization callback URL: use the URL Convex prints when you run
+     `npx convex dev` (or check `npx convex env get CONVEX_SITE_URL`), e.g.
+     `https://<your-deployment>.convex.site/api/auth/callback/github`
+2. Set the resulting client ID/secret on your Convex deployment:
 
-- AI Tool Usage, in minutes (number)
+```bash
+npx convex env set AUTH_GITHUB_ID <client-id>
+npx convex env set AUTH_GITHUB_SECRET <client-secret>
+```
 
-- Problems Solved (number)
+## 4. Configure GitHub data sync
 
-- Task Difficulty (1–5 scale — dropdown or segmented control)
+Commit/PR/review history is pulled server-side using a personal access
+token, separate from OAuth login ([convex/github.js](convex/github.js)).
 
-- Experience Level (1–5 scale)
+1. Create a classic PAT at https://github.com/settings/tokens with
+   `public_repo` and `read:user` scopes.
+2. Set it on Convex:
 
-- Programming Score (1–10 scale)
+```bash
+npx convex env set GITHUB_TOKEN <token>
+```
 
-Include inline validation states (required field, invalid number) and a clear success/error message area after submit. A "Save Log" button.
+## 5. Optional: AI text (weekly summaries, burnout assessment)
 
-## 4. Dashboard page
+Two features generate text with an LLM: the weekly summary
+([convex/weeklySummary.js](convex/weeklySummary.js)) and the plain-language
+burnout assessment ([convex/burnout.js](convex/burnout.js)). Both go through
+one provider chain in [convex/lib/llm.js](convex/lib/llm.js):
 
-Stack these sections vertically, each in its own card:
+**Anthropic → Groq → mock text.**
 
-1. **GitHub Sync** — a small card: if no GitHub username is linked, show a text input + "Save" button; if linked, show "Linked GitHub account: <username>" plus a date picker and a "Sync Commits from GitHub" button with a loading state.
+Set either key, both, or neither:
 
-2. **Weekly AI Summary** — a card with a "Generate Weekly Summary" button (loading state while generating) that reveals a paragraph of AI-generated text below it.
+```bash
+npx convex env set ANTHROPIC_API_KEY <key>
+```
 
-3. **Prediction** — a card with three controls in a row: a "predictor field" dropdown (choose from the same fields as the log form), a number input for a planned value, an "output field" dropdown, and a "Predict" button. Below, show the result: an estimated number, plus small caption text with sample size, an R² value, and a caveat that this is a rough estimate from limited data, not a guarantee.
+```bash
+npx convex env set GROQ_API_KEY <key>
+```
 
-4. **Trends** — a card with a date-range selector (Last 7 / 30 / 90 days), a multi-select of which fields to plot (chips or checkboxes, several selected by default), and a line chart area showing the selected fields over time.
+- Both set: Anthropic is used, and Groq covers it automatically if Anthropic
+  is out of credit, rate-limited, or unreachable (401/402/429/5xx or a failed
+  request). A refusal or an unparseable reply is a real answer, so it stops
+  there rather than retrying elsewhere.
+- Only `GROQ_API_KEY`: Groq is used directly. Get a free key at
+  https://console.groq.com/keys. Defaults to `llama-3.3-70b-versatile`;
+  override with `npx convex env set GROQ_MODEL <model>`.
+- Neither: both features return clearly-labelled mock text instead of
+  failing. The burnout **score** is rule-based and never depends on an LLM —
+  only its narration does.
 
-5. **Correlations** — a card showing a 9x9 correlation heatmap/table across all the numeric fields listed above (color-coded from strongly negative to strongly positive), with a caption showing how many days of data it's based on.
+## 6. WakaTime sync (per-user, no setup needed here)
 
-App navigation: once logged in, a persistent top nav bar with the app name/logo, and tabs/links for "Daily Log" and "Dashboard", plus a user avatar menu on the right (mock — no real session).
+WakaTime time-tracking is opt-in per user, not an env var: once signed in,
+each user pastes their own key (from
+https://wakatime.com/settings/api-key) into the "WakaTime ingestion" card on
+the dashboard.
 
-## Style
+## 7. Run the app
 
-Clean, modern developer-tool aesthetic — think Linear or Vercel dashboard, not corporate SaaS. Good use of whitespace, subtle borders/shadows on cards, a readable monospace or geometric sans font for numbers/stats. Support both light and dark mode. Fully responsive down to mobile width.
+With `npx convex dev` still running in one terminal, start the frontend in
+another:
 
-Use realistic mock data (a week or two of varied daily entries) so every section renders with something to look at, not empty states.
-
-This project was built with [Lovable](https://lovable.dev).
-
-## Build with Lovable
-
-Continue developing this project in the [Lovable editor](https://lovable.dev/projects/259f90b9-7a5f-4f91-8a59-e1481bc6b868).
-
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: every change made in Lovable is committed straight to this repository.
-- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
-
-## Development
-
-Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
-
-```sh
-git clone <this-repository-url>
-cd <repository-name>
-npm i
+```bash
 npm run dev
 ```
+
+The app runs at http://localhost:8080. Sign in with GitHub, then use the
+dashboard cards to sync GitHub/WakaTime data and log daily entries.
+
+## Other scripts
+
+```bash
+npm run build     # production build
+npm run lint       # eslint
+npm run format     # prettier --write .
+```
+
+## Deploying to Vercel
+
+The app is SSR, not a static SPA — Nitro builds a server function and Vercel
+runs it. `npm run build` emits `.vercel/output` (Build Output API v3), which
+Vercel deploys directly.
+
+### Why there are no rewrites in `vercel.json`
+
+The usual `{"rewrites": [{"source": "/(.*)", "destination": "/index.html"}]}`
+is the fix for a **static SPA**, where refreshing `/dashboard` asks the CDN
+for a file that doesn't exist and gets a 404. That does not apply here.
+Nitro already generates this catch-all in `.vercel/output/config.json`:
+
+```json
+{ "src": "/(.*)", "dest": "/__server" }
+```
+
+Every URL — including a hard refresh on `/dashboard?view=analytics` — is
+handled by the server function. Adding SPA rewrites on top would shadow that
+route and break SSR, so [vercel.json](vercel.json) only pins the build and
+install commands.
+
+### 1. Point Convex at production
+
+Deploy your Convex functions to a production deployment and note its URL:
+
+```bash
+npx convex deploy
+```
+
+Set the server-side secrets on that **production** deployment (they are per
+deployment, so the dev ones do not carry over):
+
+```bash
+npx convex env set --prod AUTH_GITHUB_ID <client-id>
+```
+
+Repeat for `AUTH_GITHUB_SECRET`, `GITHUB_TOKEN`, and whichever of
+`ANTHROPIC_API_KEY` / `GROQ_API_KEY` you use.
+
+### 2. Create the Vercel project
+
+```bash
+npx vercel link
+```
+
+Vercel reads `vercel.json`, so the build and install commands are already
+set. Leave the output directory blank — the Build Output API takes over.
+
+### 3. Set the frontend environment variable
+
+The browser bundle needs your **production** Convex URL. In the Vercel
+dashboard (Settings → Environment Variables) or via the CLI:
+
+```bash
+npx vercel env add VITE_CONVEX_URL production
+```
+
+Paste the `https://<your-prod-deployment>.convex.cloud` URL that
+`npx convex deploy` printed.
+
+### 4. Update the OAuth callback and site URL
+
+GitHub OAuth is registered against a specific callback. After the first
+deploy gives you a domain:
+
+1. In your GitHub OAuth App, set the Homepage URL to your Vercel domain and
+   the callback URL to
+   `https://<your-prod-deployment>.convex.site/api/auth/callback/github`.
+2. Point Convex at the deployed frontend so post-login redirects land there:
+
+```bash
+npx convex env set --prod SITE_URL https://<your-app>.vercel.app
+```
+
+Skipping this step is the usual cause of a login that succeeds and then
+bounces back to `localhost:8080`.
+
+### 5. Deploy
+
+```bash
+npx vercel --prod
+```
+
+Pushing to the branch connected in the Vercel dashboard deploys
+automatically after that.
+
+### Deploying somewhere else
+
+The Nitro preset is read from `NITRO_PRESET` and falls back to `vercel`
+([vite.config.ts](vite.config.ts)). To build for another host, set it —
+`NITRO_PRESET=cloudflare npm run build`, `netlify`, `node-server`, etc.
+
+## Project structure
+
+- `convex/` — schema, queries/mutations/actions, split by data provenance
+  (self-reported vs. measured vs. sync audit — see the comment atop
+  [convex/schema.js](convex/schema.js))
+- `src/routes/` — TanStack Router pages (`login`, `dashboard`, `log`)
+- `src/components/dashboard/` — one card per dashboard feature
+
+See [CLAUDE.md](CLAUDE.md) for branching rules and
+[PROGRESS_REPORT.md](PROGRESS_REPORT.md) for current project status.

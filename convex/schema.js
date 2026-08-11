@@ -29,6 +29,7 @@ export default defineSchema({
     phoneVerificationTime: v.optional(v.number()),
     isAnonymous: v.optional(v.boolean()),
     githubUsername: v.optional(v.string()),
+    wakatimeApiKey: v.optional(v.string()),
     // Minutes AHEAD of UTC (Yangon = +390). Note this is the negation of
     // JavaScript's Date.getTimezoneOffset(), which counts the other way — the
     // sign is flipped at the call site so the stored value reads naturally.
@@ -37,6 +38,22 @@ export default defineSchema({
     // mislabels a Yangon developer's whole day by 6.5 hours: 20:00 local lands
     // in the "afternoon" bucket, so "when do you code" comes out backwards.
     timezoneOffsetMinutes: v.optional(v.number()),
+    // What the user is aiming for, per day. Kept on the user record rather
+    // than in a table of its own for the same reason wakatimeApiKey is: it's
+    // a handful of scalars with exactly one row per user, and history isn't
+    // wanted — a goal that changed last month would make every past day's
+    // "did I hit it" answer depend on when you asked.
+    //
+    // Each is optional and unset by default. Nothing in the analysis reads
+    // these; they only change what a card compares against, so an ambitious
+    // goal can never distort a statistic.
+    goals: v.optional(
+      v.object({
+        codingHours: v.optional(v.number()),
+        sleepHours: v.optional(v.number()),
+        commits: v.optional(v.number()),
+      }),
+    ),
   })
     .index("email", ["email"])
     .index("phone", ["phone"]),
@@ -45,7 +62,11 @@ export default defineSchema({
   dailyLogs: defineTable({
     userId: v.id("users"),
     date: v.string(), // ISO date, e.g. "2026-08-07"
-    codingHours: v.number(),
+    // Optional because it's a fallback: once WakaTime is connected, the
+    // dashboard stops asking for this (WakaTime's measured figure wins in
+    // analytics.buildDataset — see the comment there), so new rows from a
+    // connected user simply won't carry it.
+    codingHours: v.optional(v.number()),
     sleepHours: v.number(),
     coffeeIntake: v.number(),
     aiToolUsageMinutes: v.number(),
@@ -100,11 +121,51 @@ export default defineSchema({
     .index("by_user_and_date", ["userId", "date"])
     .index("by_user", ["userId"]),
 
+  // LAYER 1c — measured. Written only by convex/wakatime.js. Kept apart from
+  // dailyLogs.codingHours for the same reason githubDaily is kept apart from
+  // it: this is fetched from an external API, not typed in.
+  wakatimeDaily: defineTable({
+    userId: v.id("users"),
+    date: v.string(),
+    codingSeconds: v.number(),
+    languages: v.optional(v.array(v.object({ name: v.string(), seconds: v.number() }))),
+    // Longest unbroken coding stretch that day, from WakaTime's Durations API
+    // (heartbeat blocks merged across gaps under 15 minutes). Optional because
+    // it comes from a second, best-effort request per day — a summaries-only
+    // sync (or one where a single day's durations call failed) still has
+    // codingSeconds without this.
+    longestSessionMinutes: v.optional(v.number()),
+    fetchedAt: v.number(),
+  })
+    .index("by_user_and_date", ["userId", "date"])
+    .index("by_user", ["userId"]),
+
+  // LAYER 3 — derived. One row per (userId, date), snapshotted daily by a
+  // cron from the same rule-based calculation burnout.getBurnoutRisk runs
+  // live (see convex/burnoutHistory.js) — this table exists purely so the
+  // score has a history to chart and correlate against, not as a second
+  // source of truth for "today's" score.
+  burnoutHistory: defineTable({
+    userId: v.id("users"),
+    date: v.string(),
+    score: v.number(),
+    level: v.union(v.literal("low"), v.literal("moderate"), v.literal("high")),
+    sampleSize: v.number(),
+    ranAt: v.number(),
+  })
+    .index("by_user_and_date", ["userId", "date"])
+    .index("by_user", ["userId"]),
+
   // LAYER 2 — ingestion audit. Every backfill/sync appends one row, including
   // failures, so the dataset's coverage is explainable after the fact.
   syncRuns: defineTable({
     userId: v.id("users"),
-    kind: v.union(v.literal("calendar"), v.literal("detailed"), v.literal("migration")),
+    kind: v.union(
+      v.literal("calendar"),
+      v.literal("detailed"),
+      v.literal("migration"),
+      v.literal("wakatime"),
+    ),
     startDate: v.string(),
     endDate: v.string(),
     daysWritten: v.number(),

@@ -13,12 +13,12 @@ import {
 
 import { Card } from "@/components/dashboard/card";
 import type { DatasetRow, RollingRow } from "@/lib/analytics-types";
+import { CheckToggle } from "@/components/ui/check-toggle";
 import { FIELDS, type FieldKey } from "@/lib/fields";
 import { daysAgoStr } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 import { api } from "@convex/_generated/api";
 
-const RANGES = [7, 30, 90, 365] as const;
 const COLORS = [
   "var(--color-chart-1)",
   "var(--color-chart-2)",
@@ -28,8 +28,7 @@ const COLORS = [
   "var(--color-chart-6)",
 ];
 
-export function TrendsCard() {
-  const [range, setRange] = useState<number>(90);
+export function TrendsCard({ range }: { range: number }) {
   const [smooth, setSmooth] = useState(true);
   const [selected, setSelected] = useState<FieldKey[]>([
     "codingHours",
@@ -67,32 +66,9 @@ export function TrendsCard() {
       icon={ChartSpline}
     >
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex rounded-lg border border-border p-0.5">
-          {RANGES.map((r) => (
-            <button
-              key={r}
-              type="button"
-              onClick={() => setRange(r)}
-              className={cn(
-                "rounded-md px-3 py-1 font-mono text-xs transition-colors",
-                range === r
-                  ? "bg-accent text-accent-foreground"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {r === 365 ? "1y" : `${r}d`}
-            </button>
-          ))}
-        </div>
-        <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
-          <input
-            type="checkbox"
-            checked={smooth}
-            onChange={(e) => setSmooth(e.target.checked)}
-            className="size-3.5 accent-[var(--color-primary)]"
-          />
+        <CheckToggle checked={smooth} onCheckedChange={setSmooth}>
           7-day rolling mean
-        </label>
+        </CheckToggle>
         <span className="font-mono text-xs text-muted-foreground">
           {loading ? "Loading…" : `${raw?.length ?? 0} days with data`}
         </span>
@@ -117,7 +93,7 @@ export function TrendsCard() {
                 aria-hidden
                 className={cn(
                   "size-1.5 rounded-full",
-                  f.source === "github" ? "bg-chart-2" : "bg-chart-5",
+                  f.source !== "self" ? "bg-chart-2" : "bg-chart-5",
                 )}
               />
               {f.label}

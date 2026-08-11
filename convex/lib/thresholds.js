@@ -13,3 +13,8 @@ export const MIN_SAMPLE_FOR_REGRESSION = 10;
 
 // Two-tailed significance level used throughout.
 export const ALPHA = 0.05;
+
+// Burnout risk compares a recent window to the window before it. Below this
+// many logged days *in the recent window*, the trend is mostly noise — e.g.
+// two bad nights out of three days would swing the score wildly.
+export const MIN_DAYS_FOR_BURNOUT = 5;

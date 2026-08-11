@@ -16,7 +16,12 @@ dist-ssr
 .nitro
 *.local
 
-# Wrangler / Cloudflare
+# Vercel — .vercel/output is the build artifact, .vercel/project.json is the
+# local link to your Vercel project. Neither belongs in the repo.
+.vercel
+
+# Leftover from the old Cloudflare preset. The build no longer writes here,
+# but an existing working copy still has the directory.
 .wrangler/
 .dev.vars
 
@@ -35,3 +40,6 @@ dist-ssr
 # Keep database dumps out of the repo entirely.
 backups/
 *.zip
+
+# Personal Claude Code permission grants — not shared config.
+.claude/settings.local.json

@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useQuery } from "convex/react";
 
 import { Card } from "@/components/dashboard/card";
+import { TechnicalDetails } from "@/components/dashboard/technical-details";
 import type { LaggedCorrelations } from "@/lib/analytics-types";
 import {
   Select,
@@ -11,9 +12,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { FIELDS, type FieldKey } from "@/lib/fields";
+import { FIELDS, fieldLabel, type FieldKey } from "@/lib/fields";
 import { cn } from "@/lib/utils";
 import { api } from "@convex/_generated/api";
+
+function summarize(result: LaggedCorrelations, predictor: FieldKey, outcome: FieldKey) {
+  const best = result.lags.reduce<LaggedCorrelations["lags"][number] | null>((acc, lag) => {
+    if (lag.r === null || !lag.significant) return acc;
+    if (!acc || Math.abs(lag.r) > Math.abs(acc.r as number)) return lag;
+    return acc;
+  }, null);
+  if (!best) return "No clear timing pattern yet — log more days to see one.";
+  const when = best.lag === 0 ? "the same day" : `${best.lag} day(s) later`;
+  return `${fieldLabel(predictor)} lines up best with ${fieldLabel(outcome)} ${when}.`;
+}
 
 // Same-day correlation is the wrong question for most of these habits: a short
 // night shows up in the *next* day's work. This card runs the same test at
@@ -35,8 +47,8 @@ export function LagCard() {
 
   return (
     <Card
-      title="Lagged effects"
-      description="Does today's habit line up with today's output, or tomorrow's?"
+      title="Timing"
+      description="Does a habit show up the same day, or does it take a day or two?"
       icon={Clock4}
     >
       <div className="grid gap-3 sm:grid-cols-2">
@@ -76,7 +88,9 @@ export function LagCard() {
         <p className="mt-5 text-sm text-muted-foreground">Loading…</p>
       ) : (
         <>
-          <div className="mt-5 space-y-2">
+          <p className="mt-5 text-sm">{summarize(result, predictor, outcome)}</p>
+
+          <div className="mt-3 space-y-2">
             {result.lags.map((lag) => {
               const width = lag.r === null ? 0 : (Math.abs(lag.r) / maxAbsR) * 100;
               return (
@@ -99,33 +113,36 @@ export function LagCard() {
                       }}
                     />
                   </div>
-                  <span className="stat-num w-32 shrink-0 text-right text-xs">
-                    {lag.r === null ? (
-                      <span className="text-muted-foreground">n = {lag.n}, too few</span>
-                    ) : (
-                      <>
-                        r = {lag.r.toFixed(2)}
-                        <span className="ml-1 text-muted-foreground">(n = {lag.n})</span>
-                      </>
-                    )}
+                  <span className="stat-num w-32 shrink-0 text-right text-xs text-muted-foreground">
+                    {lag.r === null ? "not enough data" : lag.significant ? "clear pattern" : "weak"}
                   </span>
                 </div>
               );
             })}
           </div>
 
-          <div className="mt-4 rounded-lg border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
-            <p>
-              Solid bars are significant at p &lt; 0.05; faded bars are not. Because{" "}
-              {result.testsRun} lags are tested at once, the honest threshold after correcting for
-              multiple comparisons is p &lt; {result.bonferroniAlpha.toFixed(3)} — a single starred
-              lag among several is weak evidence on its own.
-            </p>
-            <p className="mt-2">
-              A lag that lines up is still not causation: both sides can follow the same weekly
-              rhythm, and a deadline can raise coding hours and lower sleep at once.
-            </p>
-          </div>
+          <TechnicalDetails>
+            <div className="space-y-1.5">
+              {result.lags.map((lag) => (
+                <p key={lag.lag} className="font-mono text-xs text-muted-foreground">
+                  {lag.lag === 0 ? "same day" : `+${lag.lag} day(s)`}:{" "}
+                  {lag.r === null ? `n = ${lag.n}, too few` : `r = ${lag.r.toFixed(2)} (n = ${lag.n})`}
+                </p>
+              ))}
+            </div>
+            <div className="mt-3 rounded-lg border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
+              <p>
+                Solid bars are significant at p &lt; 0.05; faded bars are not. Because{" "}
+                {result.testsRun} lags are tested at once, the honest threshold after correcting for
+                multiple comparisons is p &lt; {result.bonferroniAlpha.toFixed(3)} — a single starred
+                lag among several is weak evidence on its own.
+              </p>
+              <p className="mt-2">
+                A lag that lines up is still not causation: both sides can follow the same weekly
+                rhythm, and a deadline can raise coding hours and lower sleep at once.
+              </p>
+            </div>
+          </TechnicalDetails>
         </>
       )}
     </Card>

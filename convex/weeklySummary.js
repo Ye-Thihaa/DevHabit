@@ -2,8 +2,7 @@ import { action } from "./_generated/server";
 import { v, ConvexError } from "convex/values";
 import { api } from "./_generated/api";
 import { getAuthUserId } from "@convex-dev/auth/server";
-
-const MODEL = "claude-opus-5";
+import { generateText } from "./lib/llm.js";
 
 // Strips the join bookkeeping and keeps provenance flags, so the model is told
 // which numbers were measured and which were typed in.
@@ -66,7 +65,8 @@ function buildMockSummary(rows) {
   };
 
   return (
-    "[Mock summary — set ANTHROPIC_API_KEY on this deployment for a real AI-generated one] " +
+    "[Mock summary — set ANTHROPIC_API_KEY or GROQ_API_KEY on this deployment for a real " +
+    "AI-generated one] " +
     `${withSelf.length} day(s) self-reported, ${withGh.length} day(s) with GitHub data. ` +
     `Average coding ${avg(withSelf, (r) => r.selfReported.codingHours)}h, ` +
     `sleep ${avg(withSelf, (r) => r.selfReported.sleepHours)}h, ` +
@@ -97,42 +97,15 @@ export const generateWeeklySummary = action({
     }
 
     const rows = toPromptRows(dataset);
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) {
+    const result = await generateText({
+      prompt: buildPrompt(rows, stats.rows),
+      maxTokens: 1024,
+      label: "summarize this data",
+    });
+    if (!result) {
       return buildMockSummary(rows);
     }
 
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        max_tokens: 1024,
-        output_config: { effort: "low" },
-        messages: [{ role: "user", content: buildPrompt(rows, stats.rows) }],
-      }),
-    });
-
-    if (!response.ok) {
-      const text = await response.text();
-      throw new ConvexError(`Claude API error (${response.status}): ${text.slice(0, 300)}`);
-    }
-
-    const data = await response.json();
-
-    if (data.stop_reason === "refusal") {
-      throw new ConvexError("Claude declined to summarize this data.");
-    }
-
-    const textBlock = data.content.find((block) => block.type === "text");
-    if (!textBlock) {
-      throw new ConvexError("Claude returned no text content.");
-    }
-
-    return textBlock.text;
+    return result.text;
   },
 });
