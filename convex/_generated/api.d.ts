@@ -16,6 +16,7 @@ import type * as crons from "../crons.js";
 import type * as dailyLogs from "../dailyLogs.js";
 import type * as github from "../github.js";
 import type * as http from "../http.js";
+import type * as leetcode from "../leetcode.js";
 import type * as lib_commitFiles from "../lib/commitFiles.js";
 import type * as lib_fields from "../lib/fields.js";
 import type * as lib_llm from "../lib/llm.js";
@@ -46,6 +47,7 @@ declare const fullApi: ApiFromModules<{
   dailyLogs: typeof dailyLogs;
   github: typeof github;
   http: typeof http;
+  leetcode: typeof leetcode;
   "lib/commitFiles": typeof lib_commitFiles;
   "lib/fields": typeof lib_fields;
   "lib/llm": typeof lib_llm;

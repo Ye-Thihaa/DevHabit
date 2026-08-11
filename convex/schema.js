@@ -30,6 +30,10 @@ export default defineSchema({
     isAnonymous: v.optional(v.boolean()),
     githubUsername: v.optional(v.string()),
     wakatimeApiKey: v.optional(v.string()),
+    // Public LeetCode handle. Not a credential — the profile data this app
+    // reads is public, so there is nothing to keep secret and nothing to
+    // mask in the UI. Per-user, like the WakaTime key above.
+    leetcodeUsername: v.optional(v.string()),
     // Minutes AHEAD of UTC (Yangon = +390). Note this is the negation of
     // JavaScript's Date.getTimezoneOffset(), which counts the other way — the
     // sign is flipped at the call site so the stored value reads naturally.
@@ -70,7 +74,10 @@ export default defineSchema({
     sleepHours: v.number(),
     coffeeIntake: v.number(),
     aiToolUsageMinutes: v.number(),
-    problemsSolved: v.number(),
+    // Optional for the same reason codingHours is: once LeetCode is
+    // connected the form stops collecting this (see src/routes/log.tsx) and
+    // analytics.buildDataset prefers the measured figure anyway.
+    problemsSolved: v.optional(v.number()),
     taskDifficulty: v.number(), // 1-5
     experienceLevel: v.number(), // 1-5
     programmingScore: v.number(), // 1-10
@@ -180,6 +187,39 @@ export default defineSchema({
     .index("by_user_and_name", ["userId", "fullName"])
     .index("by_user", ["userId"]),
 
+  // LAYER 1e — measured. Written only by convex/leetcode.js.
+  //
+  // LeetCode exposes no per-day "solved" history, so this cannot be
+  // back-filled: the only daily figure available is a snapshot of the running
+  // totals, differenced against the previous day. Same shape as
+  // burnoutHistory — one row per (userId, date), written forward only.
+  //
+  // Totals are stored alongside the deltas on purpose. A delta on its own is
+  // unverifiable after the fact, and a missed day (cron failure, profile
+  // temporarily private) would silently look like "solved nothing" rather
+  // than "we don't know" — the totals make the gap recoverable.
+  leetcodeDaily: defineTable({
+    userId: v.id("users"),
+    date: v.string(),
+    // Running totals as of this snapshot.
+    totalSolved: v.number(),
+    easySolved: v.number(),
+    mediumSolved: v.number(),
+    hardSolved: v.number(),
+    // Difference from the previous snapshot. Null on the first ever row —
+    // there is nothing to difference against, and 0 would be a lie.
+    solvedToday: v.optional(v.number()),
+    easyToday: v.optional(v.number()),
+    mediumToday: v.optional(v.number()),
+    hardToday: v.optional(v.number()),
+    // How many days back the previous snapshot was. 1 is a clean daily
+    // difference; more means the delta covers a gap and is not a day's work.
+    daysSincePrevious: v.optional(v.number()),
+    fetchedAt: v.number(),
+  })
+    .index("by_user_and_date", ["userId", "date"])
+    .index("by_user", ["userId"]),
+
   // LAYER 2 — ingestion audit. Every backfill/sync appends one row, including
   // failures, so the dataset's coverage is explainable after the fact.
   syncRuns: defineTable({
@@ -190,6 +230,7 @@ export default defineSchema({
       v.literal("migration"),
       v.literal("wakatime"),
       v.literal("repos"),
+      v.literal("leetcode"),
     ),
     startDate: v.string(),
     endDate: v.string(),

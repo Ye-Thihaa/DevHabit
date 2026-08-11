@@ -22,4 +22,15 @@ crons.daily(
   internal.burnoutHistory.snapshotAllUsers,
 );
 
+// LeetCode exposes running totals only, not a per-day history — see the
+// header comment in convex/leetcode.js. One snapshot a day is the only cadence
+// that makes sense; snapshotting more often would just measure "how many
+// times we polled today", not solving activity. Timed after the burnout
+// snapshot so the two crons don't contend for the same users' rows.
+crons.daily(
+  "snapshot leetcode totals",
+  { hourUTC: 23, minuteUTC: 55 },
+  internal.leetcode.snapshotAllConnectedUsers,
+);
+
 export default crons;
