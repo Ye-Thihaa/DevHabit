@@ -291,9 +291,35 @@ function buildMockAssessment(rule) {
   return { ...rule, ...base };
 }
 
+// The prompt asks for "ONLY the JSON object, no markdown fences, no other
+// text" — Claude follows that reliably, but Groq/Llama often don't: a real
+// observed reply was "Here's the JSON object:\n\n{...}\n\nLet me know if
+// you'd like anything else!". Stripped fences plus a straight JSON.parse
+// handles Claude's output; this adds a fallback that pulls out the {...}
+// span for models that ignore the "nothing else" instruction.
+function extractJsonObject(text) {
+  const stripped = text
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/```\s*$/i, "")
+    .trim();
+
+  try {
+    return JSON.parse(stripped);
+  } catch (directParseError) {
+    const start = stripped.indexOf("{");
+    const end = stripped.lastIndexOf("}");
+    if (start === -1 || end === -1 || end <= start) {
+      throw directParseError;
+    }
+    // Whatever's outside that span was prose the model added despite the
+    // instruction not to; whatever's inside still has to be valid JSON.
+    return JSON.parse(stripped.slice(start, end + 1));
+  }
+}
+
 function parseAssessmentJson(text) {
-  const cleaned = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "");
-  const parsed = JSON.parse(cleaned);
+  const parsed = extractJsonObject(text);
   if (typeof parsed.headline !== "string" || typeof parsed.reasoning !== "string") {
     throw new Error("Missing required fields");
   }
@@ -324,8 +350,13 @@ export const getBurnoutAssessment = action({
     try {
       return { ...rule, ...parseAssessmentJson(result.text) };
     } catch {
+      // A snippet of the actual reply, not just "couldn't parse it" — this
+      // is the only place in the app the model's raw output ever reaches an
+      // error message, and without it a parse failure is undebuggable from
+      // the outside.
       throw new ConvexError(
-        `The ${result.provider} response could not be parsed as an assessment.`,
+        `The ${result.provider} response could not be parsed as an assessment. ` +
+          `It started with: ${result.text.slice(0, 200).trim()}${result.text.length > 200 ? "…" : ""}`,
       );
     }
   },
