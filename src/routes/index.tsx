@@ -1,4 +1,5 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { useConvexAuth } from "@convex-dev/auth/react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
   ArrowRight,
   BrainCircuit,
@@ -9,6 +10,7 @@ import {
   Terminal,
   TrendingUp,
 } from "lucide-react";
+import { useEffect } from "react";
 
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -67,6 +69,15 @@ const features = [
 ];
 
 function Landing() {
+  const { isLoading, isAuthenticated } = useConvexAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!isLoading && isAuthenticated) {
+      navigate({ to: "/dashboard" });
+    }
+  }, [isLoading, isAuthenticated, navigate]);
+
   return (
     <div className="min-h-screen">
       <header className="border-b border-border">

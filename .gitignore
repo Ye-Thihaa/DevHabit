@@ -44,3 +44,12 @@ backups/
 # Personal Claude Code permission grants — not shared config.
 .claude/settings.local.json
 .env*
+
+# Agent-generated skill/config directories — not shared.
+.agents/
+.claude/skills/
+convex/_generated/ai/
+skills-lock.json
+
+# Nested duplicate project folder (not part of the build).
+DevHabit/
