@@ -11,6 +11,7 @@ import { AchievementsCard } from "@/components/dashboard/achievements-card";
 import { AlertBanner } from "@/components/dashboard/alert-banner";
 import { BurnoutCard } from "@/components/dashboard/burnout-card";
 import { BurnoutTrendCard } from "@/components/dashboard/burnout-trend-card";
+import { CommitCoachCard } from "@/components/dashboard/commit-coach-card";
 import { CorrelationsCard } from "@/components/dashboard/correlations-card";
 import { DataQualityCard } from "@/components/dashboard/data-quality-card";
 import { DescriptiveCard } from "@/components/dashboard/descriptive-card";
@@ -178,7 +179,12 @@ function Dashboard() {
             <RepoProfileCard />,
           ]
         : view === "sync"
-          ? [<GithubSyncCard />, <WakatimeSyncCard />, <LeetcodeSyncCard />]
+          ? [
+              <GithubSyncCard />,
+              <WakatimeSyncCard />,
+              <LeetcodeSyncCard />,
+              <CommitCoachCard />,
+            ]
         : [
             <DataQualityCard />,
             <DescriptiveCard range={range} />,
