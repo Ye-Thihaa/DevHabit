@@ -138,7 +138,16 @@ function DailyLog() {
     for (const f of numberFields) {
       const raw = values[f.key] ?? "";
       if (raw.trim() === "") {
-        next[f.key] = "This field is required.";
+        // Every one of these fields has min 0 or 1, so "nothing happened" is
+        // always expressible as an explicit number — 0 cups of coffee is a
+        // real, valid answer, just one that has to be typed rather than left
+        // blank. Naming that here matters because the field's placeholder is
+        // also literally "0", so a cleared box and a committed zero can look
+        // identical at a glance; this message is what tells them apart.
+        next[f.key] =
+          f.min === 0
+            ? "Required — enter 0 if none, rather than leaving it blank."
+            : "This field is required.";
         continue;
       }
       const n = Number(raw);
