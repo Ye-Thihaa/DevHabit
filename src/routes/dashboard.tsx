@@ -6,9 +6,12 @@ import { useEffect, type ReactNode } from "react";
 
 import { AppShell } from "@/components/app-shell";
 import type { DashboardView } from "@/components/app-sidebar";
+import { AccuracyCard } from "@/components/dashboard/accuracy-card";
+import { AchievementsCard } from "@/components/dashboard/achievements-card";
 import { AlertBanner } from "@/components/dashboard/alert-banner";
 import { BurnoutCard } from "@/components/dashboard/burnout-card";
 import { BurnoutTrendCard } from "@/components/dashboard/burnout-trend-card";
+import { CommitCoachCard } from "@/components/dashboard/commit-coach-card";
 import { CorrelationsCard } from "@/components/dashboard/correlations-card";
 import { DataQualityCard } from "@/components/dashboard/data-quality-card";
 import { DescriptiveCard } from "@/components/dashboard/descriptive-card";
@@ -16,8 +19,10 @@ import { ExperienceCard } from "@/components/dashboard/experience-card";
 import { ExportButton } from "@/components/dashboard/export-button";
 import { LanguageCard } from "@/components/dashboard/language-card";
 import { ProductivityCard } from "@/components/dashboard/productivity-card";
+import { ProjectsCard } from "@/components/dashboard/projects-card";
 import { RepoProfileCard } from "@/components/dashboard/repo-profile-card";
 import { GithubSyncCard } from "@/components/dashboard/github-sync-card";
+import { LeetcodeSyncCard } from "@/components/dashboard/leetcode-sync-card";
 import { LagCard } from "@/components/dashboard/lag-card";
 import { PredictionCard } from "@/components/dashboard/prediction-card";
 import { StreakCard } from "@/components/dashboard/streak-card";
@@ -159,14 +164,27 @@ function Dashboard() {
       ? [
           <TodayCodingCard />,
           <StreakCard />,
+          <AchievementsCard />,
           <BurnoutCard />,
           <BurnoutTrendCard />,
           <WeeklySummaryCard />,
         ]
       : view === "profile"
-        ? [<LanguageCard />, <ProductivityCard />, <ExperienceCard />, <RepoProfileCard />]
+        ? [
+            <LanguageCard />,
+            <ProjectsCard />,
+            <ProductivityCard />,
+            <ExperienceCard />,
+            <AccuracyCard />,
+            <RepoProfileCard />,
+          ]
         : view === "sync"
-          ? [<GithubSyncCard />, <WakatimeSyncCard />]
+          ? [
+              <GithubSyncCard />,
+              <WakatimeSyncCard />,
+              <LeetcodeSyncCard />,
+              <CommitCoachCard />,
+            ]
         : [
             <DataQualityCard />,
             <DescriptiveCard range={range} />,

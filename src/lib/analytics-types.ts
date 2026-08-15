@@ -67,8 +67,12 @@ export type DatasetRow = {
   date: string;
   hasSelfReported: boolean;
   hasGithub: boolean;
+  hasWakatime: boolean;
+  hasLeetcode: boolean;
   isSeeded: boolean;
   githubDetailLevel: "calendar" | "detailed" | "migrated" | null;
+  codingHoursSource: "wakatime" | "self" | null;
+  problemsSolvedSource: "leetcode" | "self" | null;
   commitsByBucket: {
     night: number;
     morning: number;

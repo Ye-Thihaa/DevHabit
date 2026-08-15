@@ -8,14 +8,18 @@
  * @module
  */
 
+import type * as accuracy from "../accuracy.js";
+import type * as achievements from "../achievements.js";
 import type * as analytics from "../analytics.js";
 import type * as auth from "../auth.js";
 import type * as burnout from "../burnout.js";
 import type * as burnoutHistory from "../burnoutHistory.js";
+import type * as commitCoach from "../commitCoach.js";
 import type * as crons from "../crons.js";
 import type * as dailyLogs from "../dailyLogs.js";
 import type * as github from "../github.js";
 import type * as http from "../http.js";
+import type * as leetcode from "../leetcode.js";
 import type * as lib_commitFiles from "../lib/commitFiles.js";
 import type * as lib_fields from "../lib/fields.js";
 import type * as lib_llm from "../lib/llm.js";
@@ -38,14 +42,18 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  accuracy: typeof accuracy;
+  achievements: typeof achievements;
   analytics: typeof analytics;
   auth: typeof auth;
   burnout: typeof burnout;
   burnoutHistory: typeof burnoutHistory;
+  commitCoach: typeof commitCoach;
   crons: typeof crons;
   dailyLogs: typeof dailyLogs;
   github: typeof github;
   http: typeof http;
+  leetcode: typeof leetcode;
   "lib/commitFiles": typeof lib_commitFiles;
   "lib/fields": typeof lib_fields;
   "lib/llm": typeof lib_llm;

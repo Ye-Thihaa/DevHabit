@@ -3,7 +3,7 @@ import { useMutation, useQuery } from "convex/react";
 import { useConvexAuth } from "@convex-dev/auth/react";
 import { ConvexError } from "convex/values";
 import { format } from "date-fns";
-import { AlertCircle, CheckCircle2, Github, Loader2, Timer } from "lucide-react";
+import { AlertCircle, CheckCircle2, Code2, Github, Loader2, Timer } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { AppShell } from "@/components/app-shell";
@@ -61,12 +61,20 @@ function DailyLog() {
   const { isLoading, isAuthenticated } = useConvexAuth();
   const saveDailyLog = useMutation(api.dailyLogs.saveDailyLog);
   const user = useQuery(api.users.getCurrentUser, isAuthenticated ? {} : "skip");
-  // Once WakaTime is connected, coding hours are measured rather than typed
-  // in — the form stops asking for the one field it can now get elsewhere.
+  // Once WakaTime/LeetCode are connected, the corresponding field is measured
+  // rather than typed in — the form stops asking for what it can now get
+  // elsewhere.
   const hasWakatime = Boolean(user?.wakatimeApiKey);
+  const hasLeetcode = Boolean(user?.leetcodeUsername);
   const numberFields = useMemo(
-    () => SELF_FIELDS.filter((f) => !f.scale && !(hasWakatime && f.key === "codingHours")),
-    [hasWakatime],
+    () =>
+      SELF_FIELDS.filter(
+        (f) =>
+          !f.scale &&
+          !(hasWakatime && f.key === "codingHours") &&
+          !(hasLeetcode && f.key === "problemsSolved"),
+      ),
+    [hasWakatime, hasLeetcode],
   );
 
   useEffect(() => {
@@ -130,7 +138,16 @@ function DailyLog() {
     for (const f of numberFields) {
       const raw = values[f.key] ?? "";
       if (raw.trim() === "") {
-        next[f.key] = "This field is required.";
+        // Every one of these fields has min 0 or 1, so "nothing happened" is
+        // always expressible as an explicit number — 0 cups of coffee is a
+        // real, valid answer, just one that has to be typed rather than left
+        // blank. Naming that here matters because the field's placeholder is
+        // also literally "0", so a cleared box and a committed zero can look
+        // identical at a glance; this message is what tells them apart.
+        next[f.key] =
+          f.min === 0
+            ? "Required — enter 0 if none, rather than leaving it blank."
+            : "This field is required.";
         continue;
       }
       const n = Number(raw);
@@ -220,6 +237,16 @@ function DailyLog() {
             <p>
               Coding hours are pulled from WakaTime instead — sync them from the WakaTime ingestion
               card on the dashboard rather than typing them in here.
+            </p>
+          </div>
+        )}
+
+        {hasLeetcode && (
+          <div className="mt-3 flex items-start gap-2 rounded-lg border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
+            <Code2 className="mt-0.5 size-4 shrink-0" />
+            <p>
+              Problems solved is pulled from LeetCode instead — sync it from Settings rather than
+              typing it in here.
             </p>
           </div>
         )}

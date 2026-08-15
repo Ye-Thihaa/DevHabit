@@ -55,7 +55,9 @@ const selfReportedArgs = {
   sleepHours: v.number(),
   coffeeIntake: v.number(),
   aiToolUsageMinutes: v.number(),
-  problemsSolved: v.number(),
+  // Optional: once LeetCode is connected the form stops collecting this at
+  // all (see src/routes/log.tsx), same as codingHours above for WakaTime.
+  problemsSolved: v.optional(v.number()),
   taskDifficulty: v.number(),
   experienceLevel: v.number(),
   programmingScore: v.number(),

@@ -55,6 +55,35 @@ export const clearWakatimeApiKey = mutation({
   },
 });
 
+// LeetCode usernames are public — unlike the WakaTime key there is nothing
+// secret in it, so this stores and clears the same field WakaTime's
+// setter/clear pair does but has no "mask it in the UI" concern.
+export const setLeetcodeUsername = mutation({
+  args: { leetcodeUsername: v.string() },
+  handler: async (ctx, { leetcodeUsername }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new ConvexError("Not signed in");
+    }
+    const trimmed = leetcodeUsername.trim();
+    if (!trimmed) {
+      throw new ConvexError("LeetCode username cannot be empty");
+    }
+    await ctx.db.patch(userId, { leetcodeUsername: trimmed });
+  },
+});
+
+export const clearLeetcodeUsername = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new ConvexError("Not signed in");
+    }
+    await ctx.db.patch(userId, { leetcodeUsername: undefined });
+  },
+});
+
 // Bounds are generous on purpose — this is a personal target, not a
 // validated measurement, and the app has no business telling someone their
 // goal is wrong. They exist to catch a typo (700 hours of sleep) that would

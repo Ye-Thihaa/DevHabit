@@ -57,12 +57,20 @@ async function buildDataset(ctx, userId, startDate, endDate, { includeSeeded = t
         ? q.eq("userId", userId).gte("date", startDate).lte("date", endDate)
         : q.eq("userId", userId),
     );
+  const leetcodeQuery = ctx.db
+    .query("leetcodeDaily")
+    .withIndex("by_user_and_date", (q) =>
+      startDate && endDate
+        ? q.eq("userId", userId).gte("date", startDate).lte("date", endDate)
+        : q.eq("userId", userId),
+    );
 
-  const [logs, github, wakatime, burnout] = await Promise.all([
+  const [logs, github, wakatime, burnout, leetcode] = await Promise.all([
     logsQuery.collect(),
     githubQuery.collect(),
     wakatimeQuery.collect(),
     burnoutQuery.collect(),
+    leetcodeQuery.collect(),
   ]);
 
   const usableLogs = includeSeeded ? logs : logs.filter((l) => l.isSeeded !== true);
@@ -71,6 +79,7 @@ async function buildDataset(ctx, userId, startDate, endDate, { includeSeeded = t
   const ghByDate = new Map(github.map((g) => [g.date, g]));
   const wtByDate = new Map(wakatime.map((w) => [w.date, w]));
   const bhByDate = new Map(burnout.map((b) => [b.date, b]));
+  const lcByDate = new Map(leetcode.map((l) => [l.date, l]));
 
   // burnoutHistory isn't part of the union that defines which dates get a
   // row — it only ever has a row for a date that already has other data
@@ -84,6 +93,7 @@ async function buildDataset(ctx, userId, startDate, endDate, { includeSeeded = t
     const gh = ghByDate.get(date);
     const wt = wtByDate.get(date);
     const bh = bhByDate.get(date);
+    const lc = lcByDate.get(date);
     const row = { date };
 
     for (const key of SELF_FIELDS) {
@@ -121,9 +131,23 @@ async function buildDataset(ctx, userId, startDate, endDate, { includeSeeded = t
       row.codingHours = wt.codingSeconds / 3600;
     }
 
+    // Same supersede-with-a-caveat shape as codingHours above, except the
+    // caveat here is structural rather than a sentinel value: LeetCode has no
+    // per-day history, so a day's figure only exists when that day's snapshot
+    // differenced cleanly against the one immediately before it
+    // (daysSincePrevious === 1). A multi-day gap's delta describes several
+    // days at once and cannot be attributed to this one, so it is left as a
+    // miss and self-reported takes over — exactly like a WakaTime zero.
+    const leetcodeIsClean = lc && lc.daysSincePrevious === 1 && typeof lc.solvedToday === "number";
+    row.problemsSolvedSource = leetcodeIsClean ? "leetcode" : log ? "self" : null;
+    if (row.problemsSolvedSource === "leetcode") {
+      row.problemsSolved = lc.solvedToday;
+    }
+
     row.hasSelfReported = Boolean(log);
     row.hasGithub = Boolean(gh);
     row.hasWakatime = Boolean(wt);
+    row.hasLeetcode = Boolean(lc);
     row.isSeeded = log?.isSeeded === true;
     row.githubDetailLevel = gh?.detailLevel ?? null;
 

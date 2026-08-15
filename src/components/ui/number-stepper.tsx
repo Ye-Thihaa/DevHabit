@@ -43,7 +43,11 @@ export function NumberStepper({
   max,
   suffix,
   invalid,
-  placeholder = "0",
+  // Deliberately not "0" — this field's own min is often 0, so a real
+  // committed zero and an empty box would otherwise render as the same
+  // digit, just at different opacity. An em dash can't be mistaken for a
+  // value, so an empty field always reads as "nothing entered yet."
+  placeholder = "—",
   className,
 }: NumberStepperProps) {
   const clamp = (n: number) => {
