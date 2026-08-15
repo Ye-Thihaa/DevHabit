@@ -134,6 +134,9 @@ async function performSync(ctx, userId, apiKey, days) {
     languages: (day.languages ?? [])
       .filter((l) => l.total_seconds > 0)
       .map((l) => ({ name: l.name, seconds: Math.round(l.total_seconds) })),
+    projects: (day.projects ?? [])
+      .filter((p) => p.total_seconds > 0)
+      .map((p) => ({ name: p.name, seconds: Math.round(p.total_seconds) })),
   })).filter((row) => row.date);
 
   // One extra request per day to find the longest unbroken sitting that
@@ -217,6 +220,7 @@ export const writeWakatimeDays = internalMutation({
         date: v.string(),
         codingSeconds: v.number(),
         languages: v.array(v.object({ name: v.string(), seconds: v.number() })),
+        projects: v.array(v.object({ name: v.string(), seconds: v.number() })),
         longestSessionMinutes: v.optional(v.number()),
       }),
     ),

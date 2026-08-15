@@ -69,6 +69,52 @@ function bucketOf(language) {
   return "other";
 }
 
+async function loadWakatimeWindow(ctx, userId, days) {
+  const endDate = new Date().toISOString().slice(0, 10);
+  const startDate = shiftDateString(endDate, -(days - 1));
+  const rows = await ctx.db
+    .query("wakatimeDaily")
+    .withIndex("by_user_and_date", (q) =>
+      q.eq("userId", userId).gte("date", startDate).lte("date", endDate),
+    )
+    .collect();
+  return { startDate, endDate, rows };
+}
+
+// Shared by getLanguageBreakdown and getProjectBreakdown below — both read
+// the same "seconds per named entry, per day" shape off wakatimeDaily, just
+// a different array field. `withBucket` is language-only; a project name
+// (usually a repo name) has no comparable classification.
+function aggregateEntries(rows, entriesOf, { withBucket = false } = {}) {
+  const secondsByName = new Map();
+  const daysByName = new Map();
+  let totalSeconds = 0;
+
+  for (const row of rows) {
+    for (const entry of entriesOf(row)) {
+      secondsByName.set(entry.name, (secondsByName.get(entry.name) ?? 0) + entry.seconds);
+      daysByName.set(entry.name, (daysByName.get(entry.name) ?? 0) + 1);
+      totalSeconds += entry.seconds;
+    }
+  }
+
+  const items = [...secondsByName.entries()]
+    .map(([name, seconds]) => ({
+      name,
+      seconds,
+      hours: seconds / 3600,
+      share: totalSeconds > 0 ? seconds / totalSeconds : 0,
+      // How many separate days it was touched. 40 hours across 30 days is
+      // part of the routine; 40 hours in two days was one push. The share
+      // alone can't tell those apart.
+      days: daysByName.get(name) ?? 0,
+      ...(withBucket ? { bucket: bucketOf(name) } : {}),
+    }))
+    .sort((a, b) => b.seconds - a.seconds);
+
+  return { items, totalSeconds };
+}
+
 // Measured by WakaTime, per day, already stored — this just adds it up.
 // Nothing here is self-reported, so it needs none of the provenance caveats
 // the daily-log fields carry.
@@ -78,41 +124,12 @@ export const getLanguageBreakdown = query({
     const userId = await getAuthUserId(ctx);
     if (!userId) return null;
 
-    const endDate = new Date().toISOString().slice(0, 10);
-    const startDate = shiftDateString(endDate, -(days - 1));
-
-    const rows = await ctx.db
-      .query("wakatimeDaily")
-      .withIndex("by_user_and_date", (q) =>
-        q.eq("userId", userId).gte("date", startDate).lte("date", endDate),
-      )
-      .collect();
-
-    const secondsByLanguage = new Map();
-    const daysByLanguage = new Map();
-    let totalSeconds = 0;
-
-    for (const row of rows) {
-      for (const entry of row.languages ?? []) {
-        secondsByLanguage.set(entry.name, (secondsByLanguage.get(entry.name) ?? 0) + entry.seconds);
-        daysByLanguage.set(entry.name, (daysByLanguage.get(entry.name) ?? 0) + 1);
-        totalSeconds += entry.seconds;
-      }
-    }
-
-    const languages = [...secondsByLanguage.entries()]
-      .map(([name, seconds]) => ({
-        name,
-        seconds,
-        hours: seconds / 3600,
-        share: totalSeconds > 0 ? seconds / totalSeconds : 0,
-        // How many separate days it was touched. A language with 40 hours
-        // across 30 days is part of the routine; 40 hours in two days was one
-        // project. The share alone can't tell those apart.
-        days: daysByLanguage.get(name) ?? 0,
-        bucket: bucketOf(name),
-      }))
-      .sort((a, b) => b.seconds - a.seconds);
+    const { startDate, endDate, rows } = await loadWakatimeWindow(ctx, userId, days);
+    const { items: languages, totalSeconds } = aggregateEntries(
+      rows,
+      (row) => row.languages ?? [],
+      { withBucket: true },
+    );
 
     const byBucket = { frontend: 0, backend: 0, mobile: 0, infra: 0, other: 0 };
     for (const language of languages) {
@@ -127,6 +144,31 @@ export const getLanguageBreakdown = query({
       daysWithData: rows.filter((r) => (r.languages ?? []).length > 0).length,
       languages,
       byBucket,
+    };
+  },
+});
+
+// Same shape as getLanguageBreakdown, but grouped by WakaTime's own project
+// field (usually the working-directory's repo name) instead of language —
+// "what did you build" rather than "what did you build it with". The two
+// are independent axes on the same tracked seconds, not alternatives to
+// each other.
+export const getProjectBreakdown = query({
+  args: { days: v.optional(v.number()) },
+  handler: async (ctx, { days = DEFAULT_WINDOW_DAYS }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return null;
+
+    const { startDate, endDate, rows } = await loadWakatimeWindow(ctx, userId, days);
+    const { items: projects, totalSeconds } = aggregateEntries(rows, (row) => row.projects ?? []);
+
+    return {
+      startDate,
+      endDate,
+      windowDays: days,
+      totalHours: totalSeconds / 3600,
+      daysWithData: rows.filter((r) => (r.projects ?? []).length > 0).length,
+      projects,
     };
   },
 });

@@ -267,11 +267,11 @@ describe("writeWakatimeDays (internal mutation)", () => {
 
     await t.mutation(internal.wakatime.writeWakatimeDays, {
       userId,
-      rows: [{ date: "2026-08-01", codingSeconds: 100, languages: [] }],
+      rows: [{ date: "2026-08-01", codingSeconds: 100, languages: [], projects: [] }],
     });
     await t.mutation(internal.wakatime.writeWakatimeDays, {
       userId,
-      rows: [{ date: "2026-08-01", codingSeconds: 200, languages: [] }],
+      rows: [{ date: "2026-08-01", codingSeconds: 200, languages: [], projects: [] }],
     });
 
     const rows = await t.run(async (ctx) => ctx.db.query("wakatimeDaily").collect());
