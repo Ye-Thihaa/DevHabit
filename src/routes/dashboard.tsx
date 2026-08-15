@@ -6,6 +6,7 @@ import { useEffect, type ReactNode } from "react";
 
 import { AppShell } from "@/components/app-shell";
 import type { DashboardView } from "@/components/app-sidebar";
+import { AccuracyCard } from "@/components/dashboard/accuracy-card";
 import { AlertBanner } from "@/components/dashboard/alert-banner";
 import { BurnoutCard } from "@/components/dashboard/burnout-card";
 import { BurnoutTrendCard } from "@/components/dashboard/burnout-trend-card";
@@ -165,7 +166,13 @@ function Dashboard() {
           <WeeklySummaryCard />,
         ]
       : view === "profile"
-        ? [<LanguageCard />, <ProductivityCard />, <ExperienceCard />, <RepoProfileCard />]
+        ? [
+            <LanguageCard />,
+            <ProductivityCard />,
+            <ExperienceCard />,
+            <AccuracyCard />,
+            <RepoProfileCard />,
+          ]
         : view === "sync"
           ? [<GithubSyncCard />, <WakatimeSyncCard />, <LeetcodeSyncCard />]
         : [
