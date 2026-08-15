@@ -9,6 +9,7 @@
  */
 
 import type * as accuracy from "../accuracy.js";
+import type * as achievements from "../achievements.js";
 import type * as analytics from "../analytics.js";
 import type * as auth from "../auth.js";
 import type * as burnout from "../burnout.js";
@@ -41,6 +42,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   accuracy: typeof accuracy;
+  achievements: typeof achievements;
   analytics: typeof analytics;
   auth: typeof auth;
   burnout: typeof burnout;
