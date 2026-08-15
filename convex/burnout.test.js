@@ -1,9 +1,23 @@
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
+import { ConvexError } from "convex/values";
 import { api } from "./_generated/api";
 import schema from "./schema";
 import { shiftDateString } from "./lib/stats.js";
 import { MIN_DAYS_FOR_BURNOUT } from "./lib/thresholds.js";
+
+function jsonResponse(body, { ok = true, status = 200 } = {}) {
+  return {
+    ok,
+    status,
+    json: async () => body,
+    text: async () => JSON.stringify(body),
+  };
+}
+
+function anthropicReply(text) {
+  return jsonResponse({ content: [{ type: "text", text }], stop_reason: "end_turn" });
+}
 
 // getAuthUserId() just reads identity.subject (see @convex-dev/auth), so a
 // fake identity whose subject equals a real users._id is enough to act as
@@ -162,5 +176,64 @@ describe("getBurnoutAssessment", () => {
     expect(result.score).toBe(0);
     expect(result.level).toBe("low");
     expect(typeof result.headline).toBe("string");
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  // A real observed Groq reply: valid JSON, but wrapped in exactly the prose
+  // the prompt asked it not to add. Must still parse.
+  test("parses a Groq-style reply with prose wrapped around the JSON", async () => {
+    const t = convexTest(schema);
+    const userId = await makeUser(t);
+    const asUser = await signInAs(t, userId);
+    await seedWindow(t, userId, TODAY, { sleepHours: 7, commits: 3, nightShare: 0.1 });
+    await seedWindow(t, userId, shiftDateString(TODAY, -14), {
+      sleepHours: 7,
+      commits: 3,
+      nightShare: 0.1,
+    });
+
+    vi.stubEnv("ANTHROPIC_API_KEY", "sk-ant-test");
+    const wrapped =
+      "Here's the JSON object:\n\n" +
+      JSON.stringify({
+        headline: "Things look steady.",
+        reasoning: "No signal moved much.",
+        suggestions: ["Keep it up"],
+      }) +
+      "\n\nLet me know if you'd like anything else!";
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(anthropicReply(wrapped)));
+
+    const result = await asUser.action(api.burnout.getBurnoutAssessment, {});
+    expect(result.headline).toBe("Things look steady.");
+    expect(result.suggestions).toEqual(["Keep it up"]);
+    // The score still comes from the rule, not from anything the model said.
+    expect(result.score).toBe(0);
+  });
+
+  test("a reply with no JSON anywhere fails with a debuggable error", async () => {
+    const t = convexTest(schema);
+    const userId = await makeUser(t);
+    const asUser = await signInAs(t, userId);
+    await seedWindow(t, userId, TODAY, { sleepHours: 7, commits: 3, nightShare: 0.1 });
+    await seedWindow(t, userId, shiftDateString(TODAY, -14), {
+      sleepHours: 7,
+      commits: 3,
+      nightShare: 0.1,
+    });
+
+    vi.stubEnv("ANTHROPIC_API_KEY", "sk-ant-test");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(anthropicReply("Sorry, I can't help with that.")),
+    );
+
+    await expect(asUser.action(api.burnout.getBurnoutAssessment, {})).rejects.toThrow(ConvexError);
+    await expect(asUser.action(api.burnout.getBurnoutAssessment, {})).rejects.toThrow(
+      /Sorry, I can't help with that/,
+    );
   });
 });
