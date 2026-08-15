@@ -136,6 +136,12 @@ export default defineSchema({
     date: v.string(),
     codingSeconds: v.number(),
     languages: v.optional(v.array(v.object({ name: v.string(), seconds: v.number() }))),
+    // WakaTime's own project grouping (usually inferred from the git repo
+    // name in the working directory), same shape as languages. Parallel
+    // field rather than a variant of it — a day can be "70% TypeScript" and
+    // "70% devhabit" at the same time, they're two different axes on the
+    // same seconds, not alternatives.
+    projects: v.optional(v.array(v.object({ name: v.string(), seconds: v.number() }))),
     // Longest unbroken coding stretch that day, from WakaTime's Durations API
     // (heartbeat blocks merged across gaps under 15 minutes). Optional because
     // it comes from a second, best-effort request per day — a summaries-only

@@ -15,13 +15,14 @@ async function makeUser(t) {
 const TODAY = new Date().toISOString().slice(0, 10);
 const day = (offset) => shiftDateString(TODAY, offset);
 
-async function addWakatime(t, userId, date, languages) {
+async function addWakatime(t, userId, date, languages, projects = []) {
   await t.run(async (ctx) => {
     await ctx.db.insert("wakatimeDaily", {
       userId,
       date,
       codingSeconds: languages.reduce((sum, l) => sum + l.seconds, 0),
       languages,
+      projects,
       fetchedAt: Date.now(),
     });
   });
@@ -116,6 +117,67 @@ describe("getLanguageBreakdown", () => {
     const result = await asUser.query(api.profile.getLanguageBreakdown, {});
     expect(result.totalHours).toBe(0);
     expect(result.languages).toEqual([]);
+  });
+});
+
+describe("getProjectBreakdown", () => {
+  test("returns null when signed out", async () => {
+    const t = convexTest(schema);
+    expect(await t.query(api.profile.getProjectBreakdown, {})).toBeNull();
+  });
+
+  test("sums seconds per project across days, independent of language", async () => {
+    const t = convexTest(schema);
+    const userId = await makeUser(t);
+    const asUser = await signInAs(t, userId);
+
+    await addWakatime(
+      t,
+      userId,
+      day(0),
+      [{ name: "TypeScript", seconds: 3600 }],
+      [{ name: "devhabit", seconds: 2400 }, { name: "dotfiles", seconds: 1200 }],
+    );
+    await addWakatime(
+      t,
+      userId,
+      day(-1),
+      [{ name: "TypeScript", seconds: 1800 }],
+      [{ name: "devhabit", seconds: 1800 }],
+    );
+
+    const result = await asUser.query(api.profile.getProjectBreakdown, { days: 30 });
+
+    expect(result.totalHours).toBeCloseTo(1.5, 5);
+    expect(result.projects[0].name).toBe("devhabit");
+    expect(result.projects[0].hours).toBeCloseTo((2400 + 1800) / 3600, 5);
+    expect(result.projects[0].days).toBe(2);
+    expect(result.projects[1].name).toBe("dotfiles");
+    expect(result.projects[1].days).toBe(1);
+    // Projects have no bucket classification — that's language-only.
+    expect(result.projects[0]).not.toHaveProperty("bucket");
+  });
+
+  test("a day with languages but no project data does not count toward daysWithData", async () => {
+    const t = convexTest(schema);
+    const userId = await makeUser(t);
+    const asUser = await signInAs(t, userId);
+
+    await addWakatime(t, userId, day(0), [{ name: "TypeScript", seconds: 3600 }], []);
+
+    const result = await asUser.query(api.profile.getProjectBreakdown, { days: 30 });
+    expect(result.daysWithData).toBe(0);
+    expect(result.projects).toEqual([]);
+  });
+
+  test("an empty history is zeroes, not a crash", async () => {
+    const t = convexTest(schema);
+    const userId = await makeUser(t);
+    const asUser = await signInAs(t, userId);
+
+    const result = await asUser.query(api.profile.getProjectBreakdown, {});
+    expect(result.totalHours).toBe(0);
+    expect(result.projects).toEqual([]);
   });
 });
 

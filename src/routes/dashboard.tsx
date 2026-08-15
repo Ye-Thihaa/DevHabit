@@ -17,6 +17,7 @@ import { ExperienceCard } from "@/components/dashboard/experience-card";
 import { ExportButton } from "@/components/dashboard/export-button";
 import { LanguageCard } from "@/components/dashboard/language-card";
 import { ProductivityCard } from "@/components/dashboard/productivity-card";
+import { ProjectsCard } from "@/components/dashboard/projects-card";
 import { RepoProfileCard } from "@/components/dashboard/repo-profile-card";
 import { GithubSyncCard } from "@/components/dashboard/github-sync-card";
 import { LeetcodeSyncCard } from "@/components/dashboard/leetcode-sync-card";
@@ -168,6 +169,7 @@ function Dashboard() {
       : view === "profile"
         ? [
             <LanguageCard />,
+            <ProjectsCard />,
             <ProductivityCard />,
             <ExperienceCard />,
             <AccuracyCard />,
